@@ -34,13 +34,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.glazkov.outagewatch.data.SavedLocation
 import com.glazkov.outagewatch.ui.formatEta
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onAddLocation: () -> Unit,
-    onOpenOutage: (String) -> Unit,
+    onOpenZip: (SavedLocation) -> Unit,
     onOpenNearby: () -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: HomeViewModel = viewModel { HomeViewModel() },
@@ -82,7 +83,7 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(state.locations, key = { it.location.zip }) { status ->
-                    LocationCard(status, onOpenOutage)
+                    LocationCard(status, onOpenZip)
                 }
                 item { Disclaimer() }
             }
@@ -113,9 +114,9 @@ private fun EmptyState(modifier: Modifier, onAddLocation: () -> Unit) {
 }
 
 @Composable
-private fun LocationCard(status: LocationStatus, onOpenOutage: (String) -> Unit) {
+private fun LocationCard(status: LocationStatus, onOpenZip: (SavedLocation) -> Unit) {
     Card(
-        onClick = { status.worstOutage?.let { onOpenOutage(it.id) } },
+        onClick = { onOpenZip(status.location) },
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp)) {
@@ -132,7 +133,7 @@ private fun LocationCard(status: LocationStatus, onOpenOutage: (String) -> Unit)
                     style = MaterialTheme.typography.bodySmall,
                 )
                 outage == null -> Text(
-                    "No outages reported in this area.",
+                    "No outages reported in this area. Tap to explore the map.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 else -> Column {

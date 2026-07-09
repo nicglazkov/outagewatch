@@ -17,6 +17,7 @@ import com.glazkov.outagewatch.ui.detail.OutageDetailScreen
 import com.glazkov.outagewatch.ui.home.HomeScreen
 import com.glazkov.outagewatch.ui.nearby.NearbyScreen
 import com.glazkov.outagewatch.ui.settings.SettingsScreen
+import com.glazkov.outagewatch.ui.zip.ZipDetailScreen
 import kotlinx.serialization.Serializable
 
 /** Process-wide dependencies. Deliberately tiny; no DI framework needed yet. */
@@ -30,6 +31,13 @@ object AppGraph {
 @Serializable object NearbyRoute
 @Serializable object SettingsRoute
 @Serializable data class DetailRoute(val outageId: String)
+@Serializable data class ZipRoute(
+    val zip: String,
+    val label: String,
+    val lat: Double,
+    val lon: Double,
+    val radiusKm: Double,
+)
 
 private val Amber = Color(0xFFFFC94A)
 
@@ -46,9 +54,25 @@ fun App() {
             composable<HomeRoute> {
                 HomeScreen(
                     onAddLocation = { nav.navigate(AddLocationRoute) },
-                    onOpenOutage = { nav.navigate(DetailRoute(it)) },
+                    onOpenZip = { loc ->
+                        nav.navigate(
+                            ZipRoute(loc.zip, loc.label, loc.lat, loc.lon, loc.radiusKm)
+                        )
+                    },
                     onOpenNearby = { nav.navigate(NearbyRoute) },
                     onOpenSettings = { nav.navigate(SettingsRoute) },
+                )
+            }
+            composable<ZipRoute> { entry ->
+                val route = entry.toRoute<ZipRoute>()
+                ZipDetailScreen(
+                    zip = route.zip,
+                    label = route.label,
+                    lat = route.lat,
+                    lon = route.lon,
+                    radiusKm = route.radiusKm,
+                    onOpenOutage = { nav.navigate(DetailRoute(it)) },
+                    onBack = { nav.popBackStack() },
                 )
             }
             composable<AddLocationRoute> {
