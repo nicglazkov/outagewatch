@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from outagewatch.api import main as api_main
-from tests.fakes import FakeEtaHistory, FakeStateStore, FakeSubs
+from tests.fakes import FakeEtaHistory, FakeSlo, FakeStateStore, FakeSubs
 from watcher.types import Item
 
 
@@ -15,6 +15,7 @@ class FakeDeps:
         self.state = FakeStateStore()
         self.subs = FakeSubs()
         self.eta_history = FakeEtaHistory()
+        self.slo = FakeSlo()
 
 
 @pytest.fixture
@@ -116,3 +117,26 @@ def test_zip_lookup_endpoint(client):
 def test_internal_poll_hidden_by_default(client):
     c, _ = client
     assert c.post("/internal/poll").status_code == 404
+
+
+def test_status_page_served_at_root(client):
+    c, _ = client
+    resp = c.get("/")
+    assert resp.status_code == 200
+    assert "OutageWatch" in resp.text
+    assert "Not affiliated" in resp.text
+
+
+def test_slo_summary_percentiles(client):
+    c, deps = client
+    deps.slo.latencies = [30.0, 60.0, 90.0, 120.0, 500.0]
+    body = c.get("/v1/slo").json()
+    assert body["count"] == 5
+    assert body["within_target"] == 4
+    assert body["p50_seconds"] == 90.0
+    assert body["max_seconds"] == 500.0
+
+
+def test_slo_summary_empty(client):
+    c, _ = client
+    assert c.get("/v1/slo").json() == {"count": 0, "target_seconds": 360}

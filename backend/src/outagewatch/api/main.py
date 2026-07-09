@@ -12,9 +12,11 @@ import os
 import uuid
 from datetime import datetime
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 
 from outagewatch import zipcodes
@@ -118,6 +120,36 @@ def _to_out(item: Item, include_geometry: bool = False) -> OutageOut:
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/", include_in_schema=False)
+async def status_page() -> FileResponse:
+    return FileResponse(Path(__file__).parent / "static" / "index.html")
+
+
+@app.get("/v1/slo")
+async def slo_summary(deps: Deps = Depends(get_deps)) -> dict[str, Any]:
+    """Alert-latency SLO: feed change observed to push sent, last 24h.
+
+    Target: under 6 minutes (360s). Latency here is measured from the feed's
+    own LAST_UPDATE stamp, so it includes PG&E's publish delay plus our
+    5-minute poll interval.
+    """
+    latencies = sorted(deps.slo.recent_latencies(hours=24))
+    if not latencies:
+        return {"count": 0, "target_seconds": 360}
+
+    def pct(p: float) -> float:
+        return latencies[min(len(latencies) - 1, int(p * len(latencies)))]
+
+    return {
+        "count": len(latencies),
+        "target_seconds": 360,
+        "p50_seconds": round(pct(0.5), 1),
+        "p95_seconds": round(pct(0.95), 1),
+        "max_seconds": round(latencies[-1], 1),
+        "within_target": sum(1 for v in latencies if v <= 360),
+    }
 
 
 @app.get("/v1/outages", response_model=list[OutageOut])

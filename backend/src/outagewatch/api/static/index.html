@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OutageWatch - PG&E outage status</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, sans-serif;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px 16px;
+    line-height: 1.5;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  .sub { color: gray; margin-top: 0; }
+  form { display: flex; gap: 8px; margin: 24px 0; }
+  input {
+    flex: 1;
+    font-size: 1.1rem;
+    padding: 10px 12px;
+    border: 1px solid gray;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+  }
+  button {
+    font-size: 1.1rem;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    background: #ffc94a;
+    color: #1a1a2e;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .card {
+    border: 1px solid rgba(128,128,128,0.4);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .card h3 { margin: 0 0 4px; font-size: 1.05rem; }
+  .card p { margin: 2px 0; font-size: 0.95rem; }
+  .ok { color: #2e9e44; font-weight: 600; }
+  .bad { color: #d64545; font-weight: 600; }
+  .disclaimer { color: gray; font-size: 0.85rem; margin-top: 32px; }
+</style>
+</head>
+<body>
+<h1>&#9889; OutageWatch</h1>
+<p class="sub">Live PG&E outage status by ZIP. Free, no account.</p>
+
+<form id="f">
+  <input id="zip" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"
+         placeholder="ZIP code, e.g. 95404" required>
+  <button type="submit">Check</button>
+</form>
+
+<div id="result"></div>
+
+<p class="disclaimer">
+  Not affiliated with PG&amp;E. Data comes from PG&amp;E's public outage map and
+  can lag. For emergencies call 911; report downed lines to PG&amp;E at
+  1-800-743-5000. Want push alerts? The OutageWatch app for Android and iOS
+  notifies you the moment an outage hits your area.
+</p>
+
+<script>
+const f = document.getElementById("f");
+const result = document.getElementById("result");
+
+function etaText(iso) {
+  if (!iso) return "No restoration estimate yet";
+  const d = new Date(iso);
+  return "Estimated restoration: " + d.toLocaleString("en-US", {
+    timeZone: "America/Los_Angeles",
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+}
+
+f.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const zip = document.getElementById("zip").value;
+  result.innerHTML = "<p>Checking&hellip;</p>";
+  try {
+    const r = await fetch(`/v1/outages?zip=${zip}`);
+    if (r.status === 404) {
+      result.innerHTML = "<p class='bad'>That doesn't look like a California ZIP we cover.</p>";
+      return;
+    }
+    const outages = await r.json();
+    if (outages.length === 0) {
+      result.innerHTML = `<div class="card"><h3 class="ok">No outages reported near ${zip}</h3>
+        <p>PG&E's feed shows nothing in this area right now.</p></div>`;
+      return;
+    }
+    result.innerHTML = outages.map(o => `
+      <div class="card">
+        <h3 class="bad">${o.is_psps ? "PSPS shutoff" : "Power outage"}${o.city ? " - " + o.city : ""}</h3>
+        <p>${[o.cause, o.crew_status, o.est_customers ? o.est_customers + " customers" : null]
+              .filter(Boolean).join(" &middot; ")}</p>
+        <p>${etaText(o.eta)}</p>
+      </div>`).join("");
+  } catch {
+    result.innerHTML = "<p class='bad'>Couldn't reach the outage feed. Try again shortly.</p>";
+  }
+});
+</script>
+</body>
+</html>

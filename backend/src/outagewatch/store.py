@@ -164,6 +164,23 @@ class FirestoreSloLog:
 
         self._db = firestore.Client(project=project_id)
 
+    def recent_latencies(self, hours: int = 24) -> list[float]:
+        """Feed-change-to-push latencies (seconds) for SLO reporting."""
+        from google.cloud.firestore_v1 import FieldFilter
+
+        cutoff = datetime.now(UTC).timestamp() - hours * 3600
+        cutoff_iso = datetime.fromtimestamp(cutoff, tz=UTC).isoformat()
+        docs = (
+            self._db.collection(self.COLLECTION)
+            .where(filter=FieldFilter("sent_at", ">=", cutoff_iso))
+            .stream()
+        )
+        return [
+            d.to_dict()["latency_seconds"]
+            for d in docs
+            if d.to_dict().get("latency_seconds") is not None
+        ]
+
     def log_dispatch(
         self,
         outage_id: str,
