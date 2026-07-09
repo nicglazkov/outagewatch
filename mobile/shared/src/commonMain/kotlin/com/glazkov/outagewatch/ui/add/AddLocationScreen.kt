@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -90,7 +91,15 @@ fun AddLocationScreen(onDone: () -> Unit) {
                 enabled = zip.length == 5 && !busy,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                if (busy) CircularProgressIndicator(Modifier.height(20.dp)) else Text("Watch this area")
+                if (busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Text("Watch this area")
+                }
             }
         }
     }

@@ -21,11 +21,17 @@ object ApiConfig {
 
 class OutageApi(private val client: HttpClient = defaultClient()) {
 
-    suspend fun outagesNear(lat: Double, lon: Double, radiusKm: Double = 10.0): List<Outage> =
+    suspend fun outagesNear(
+        lat: Double,
+        lon: Double,
+        radiusKm: Double = 10.0,
+        includeGeometry: Boolean = false,
+    ): List<Outage> =
         client.get("${ApiConfig.baseUrl}/v1/outages") {
             parameter("lat", lat)
             parameter("lon", lon)
             parameter("radius_km", radiusKm)
+            if (includeGeometry) parameter("include_geometry", true)
         }.body()
 
     suspend fun outagesForZip(zip: String): List<Outage> =
