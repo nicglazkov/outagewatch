@@ -33,7 +33,9 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
+      # Invoke via sh so the run is independent of gradlew's executable bit,
+      # which Windows git commits can silently reset.
       - name: Unit tests
-        run: ./gradlew :shared:testAndroidHostTest --console=plain
+        run: sh gradlew :shared:testAndroidHostTest --console=plain
       - name: Build debug APK
-        run: ./gradlew :androidApp:assembleDebug --console=plain
+        run: sh gradlew :androidApp:assembleDebug --console=plain
