@@ -1,40 +1,37 @@
 package com.glazkov.outagewatch.ui.zip
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.Text
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.glazkov.outagewatch.ui.detail.NavBar
 import com.glazkov.outagewatch.ui.formatEta
 import com.glazkov.outagewatch.ui.map.OutageMapView
+import com.glazkov.outagewatch.ui.theme.Cell
+import com.glazkov.outagewatch.ui.theme.GroupedSection
+import com.glazkov.outagewatch.ui.theme.LocalCompass
+import com.glazkov.outagewatch.ui.theme.SectionHeader
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ZipDetailScreen(
     zip: String,
@@ -46,95 +43,62 @@ fun ZipDetailScreen(
     onBack: () -> Unit,
     viewModel: ZipViewModel = viewModel(key = zip) { ZipViewModel(zip, lat, lon, radiusKm) },
 ) {
+    val c = LocalCompass.current
     val state by viewModel.state.collectAsState()
     val dark = isSystemInDarkTheme()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(label) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-    ) { padding ->
+    Column(Modifier.fillMaxSize().background(c.background)) {
+        NavBar(label, onBack)
         if (state.loading) {
             Column(
-                Modifier.fillMaxSize().padding(padding),
-                verticalArrangement = Arrangement.Center,
+                Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
-            ) { CircularProgressIndicator() }
-            return@Scaffold
+            ) { CircularProgressIndicator(color = c.accent) }
+            return@Column
         }
-
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            Text(
-                summaryLine(state),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+        Box(Modifier.fillMaxWidth().height(280.dp)) {
             OutageMapView(
-                centerLat = lat,
-                centerLon = lon,
-                radiusKm = radiusKm,
-                outages = state.areaOutages.map { it.outage },
-                dark = dark,
-                onOutageTap = onOpenOutage,
-                modifier = Modifier.fillMaxWidth().weight(1.1f),
+                centerLat = lat, centerLon = lon, radiusKm = radiusKm,
+                outages = state.areaOutages.map { it.outage }, dark = dark,
+                onOutageTap = onOpenOutage, modifier = Modifier.fillMaxSize(),
             )
-            LazyColumn(
-                Modifier.fillMaxWidth().weight(1f),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (state.areaOutages.isEmpty()) {
-                    item {
-                        Text(
-                            "Nothing reported within ${state.contextRadiusKm.roundToInt()} km. " +
-                                "You'll get a push the moment that changes.",
-                            style = MaterialTheme.typography.bodyMedium,
+        }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            Text(
+                summaryLine(state), color = c.label, fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 2.dp),
+            )
+            if (state.areaOutages.isEmpty()) {
+                Text(
+                    "Nothing reported within ${state.contextRadiusKm.roundToInt()} km. You'll " +
+                        "get a push the moment that changes.",
+                    color = c.secondary, fontSize = 14.sp, modifier = Modifier.padding(20.dp, 8.dp),
+                )
+            } else {
+                SectionHeader("Outages")
+                GroupedSection {
+                    state.areaOutages.forEachIndexed { i, entry ->
+                        val o = entry.outage
+                        Cell(
+                            title = if (o.isPsps) "PSPS shutoff" else "Power outage",
+                            subtitle = listOfNotNull(
+                                o.cause, o.city, o.estCustomers?.let { "$it customers" },
+                                formatEta(o.eta).removePrefix("Estimated restoration: ")
+                                    .let { if (it.startsWith("No")) null else "back $it" },
+                            ).joinToString(" · ").ifEmpty { "Details pending" },
+                            leadingEmoji = if (o.isPsps) "⚠️" else "⚡",
+                            leadingTint = c.outageTint,
+                            trailing = if (entry.inZip) "here" else "${entry.distanceKm.roundToInt()} km",
+                            trailingColor = if (entry.inZip) c.outage else c.secondary,
+                            chevron = true,
+                            showSeparator = i != state.areaOutages.lastIndex,
+                            onClick = { onOpenOutage(o.id) },
                         )
                     }
                 }
-                items(state.areaOutages, key = { it.outage.id }) { entry ->
-                    Card(
-                        onClick = { onOpenOutage(entry.outage.id) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(Modifier.padding(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    if (entry.outage.isPsps) "PSPS shutoff" else "Power outage",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = if (entry.inZip) {
-                                        MaterialTheme.colorScheme.error
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                                )
-                                Spacer(Modifier.weight(1f))
-                                Text(
-                                    if (entry.inZip) "in your area"
-                                    else "${entry.distanceKm.roundToInt()} km away",
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            }
-                            Text(
-                                listOfNotNull(
-                                    entry.outage.cause,
-                                    entry.outage.city,
-                                    entry.outage.estCustomers?.let { "$it customers" },
-                                ).joinToString(" · ").ifEmpty { "Details pending" },
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text(formatEta(entry.outage.eta), style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
             }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -145,7 +109,7 @@ private fun summaryLine(state: ZipState): String {
     return when {
         inZip > 0 && nearby > 0 -> "$inZip in your area · $nearby more nearby"
         inZip > 0 -> "$inZip outage${if (inZip > 1) "s" else ""} in your area"
-        nearby > 0 -> "Your area is clear · $nearby outage${if (nearby > 1) "s" else ""} nearby"
+        nearby > 0 -> "Your area is clear · $nearby nearby"
         else -> "No outages in or near your area"
     }
 }

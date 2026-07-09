@@ -19,12 +19,19 @@ data class LocationStatus(
         get() = outages.sortedWith(
             compareByDescending<Outage> { it.isPsps }.thenByDescending { it.estCustomers ?: 0 }
         ).firstOrNull()
+
+    val isOut: Boolean get() = outages.isNotEmpty()
 }
 
 data class HomeState(
     val loading: Boolean = true,
     val locations: List<LocationStatus> = emptyList(),
-)
+    // Map hero: primary area's center + nearby outages (with geometry).
+    val mapCenter: SavedLocation? = null,
+    val mapOutages: List<Outage> = emptyList(),
+) {
+    val affectedCount: Int get() = locations.count { it.isOut }
+}
 
 class HomeViewModel : ViewModel() {
     private val repo = AppGraph.locations
@@ -35,9 +42,7 @@ class HomeViewModel : ViewModel() {
 
     init {
         viewModelScope.launch {
-            repo.locations.collect { saved ->
-                refresh(saved)
-            }
+            repo.locations.collect { saved -> refresh(saved) }
         }
     }
 
@@ -51,6 +56,16 @@ class HomeViewModel : ViewModel() {
                 LocationStatus(location, api.outagesForZip(location.zip))
             }.getOrElse { LocationStatus(location, error = true) }
         }
-        _state.value = HomeState(loading = false, locations = statuses)
+        // Center the hero map on the first area affected, else the first area.
+        val primary = statuses.firstOrNull { it.isOut }?.location ?: saved.first()
+        val mapOutages = runCatching {
+            api.outagesNear(primary.lat, primary.lon, radiusKm = 35.0, includeGeometry = true)
+        }.getOrDefault(emptyList())
+        _state.value = HomeState(
+            loading = false,
+            locations = statuses,
+            mapCenter = primary,
+            mapOutages = mapOutages,
+        )
     }
 }
