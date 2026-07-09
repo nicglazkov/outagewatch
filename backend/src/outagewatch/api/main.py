@@ -36,6 +36,7 @@ class Deps:
 
     def __init__(self):
         cfg = settings()
+        from outagewatch.explain import AnthropicClient, FirestoreExplainCache
         from outagewatch.feeds.pge import PgeFeed
         from outagewatch.push import FcmSender
         from outagewatch.store import (
@@ -51,6 +52,8 @@ class Deps:
         self.slo = FirestoreSloLog(cfg.project_id)
         self.feed = PgeFeed()
         self.sender = FcmSender(cfg.project_id)
+        self.llm = AnthropicClient(cfg.anthropic_model)
+        self.explain_cache = FirestoreExplainCache(cfg.project_id)
 
 
 @lru_cache(maxsize=1)
@@ -157,6 +160,22 @@ async def get_outage(outage_id: str, deps: Deps = Depends(get_deps)) -> dict[str
         "outage": _to_out(item, include_geometry=True).model_dump(),
         "eta_history": deps.eta_history.get(outage_id),
     }
+
+
+@app.get("/v1/outages/{outage_id}/explain")
+async def explain_outage_endpoint(
+    outage_id: str, deps: Deps = Depends(get_deps)
+) -> dict[str, str]:
+    from outagewatch.explain import explain_outage
+
+    snapshot = await deps.state.load() or {}
+    item = snapshot.get(outage_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="outage not found or restored")
+    text = explain_outage(
+        item, deps.llm, deps.explain_cache, deps.eta_history.get(outage_id)
+    )
+    return {"outage_id": outage_id, "explanation": text}
 
 
 @app.post("/v1/subscriptions", status_code=201)
