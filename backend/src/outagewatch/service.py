@@ -85,6 +85,15 @@ async def poll_once(
     result = await run_cycle(feed.fetch_snapshot, state.load, state.save)
     if version is not None:
         state.save_version(version)
+        # Record the raw feed responses on every version change: a real outage
+        # day's recording becomes the regression suite.
+        raw = getattr(feed, "last_raw", None)
+        record = getattr(state, "record_raw", None)
+        if raw and record is not None:
+            try:
+                record(version, raw)
+            except Exception:
+                logger.exception("raw snapshot recording failed (non-fatal)")
     outcome.first_run = result.first_run
     outcome.items = len(result.snapshot)
     outcome.changes = len(result.changes)

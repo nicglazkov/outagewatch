@@ -65,6 +65,9 @@ class PgeFeed:
         self._client = client or httpx.AsyncClient(
             headers={"User-Agent": USER_AGENT}, timeout=30.0
         )
+        # Raw layer responses from the most recent fetch_snapshot(), keyed by
+        # layer id. Recorded to storage so real outage days become fixtures.
+        self.last_raw: dict[str, Any] = {}
 
     async def fetch_status_version(self) -> str | None:
         """Feed version stamp; changes whenever outage data updates."""
@@ -108,6 +111,7 @@ class PgeFeed:
         resp = await self._client.get(_query_url(layer))
         resp.raise_for_status()
         data = resp.json()
+        self.last_raw[f"layer_{layer}"] = data
         return data.get("features", [])
 
     async def aclose(self) -> None:
