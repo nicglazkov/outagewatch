@@ -32,6 +32,8 @@ say it is not available yet.
 - Times in the facts are already formatted in local Pacific time; repeat them \
 exactly as given.
 - 2 short paragraphs maximum, no headings, no bullet lists, no markdown.
+- Never use em dashes or en dashes. Use a period, comma, or the word "to" \
+for ranges. Plain sentences only.
 - Do not speculate about what PG&E will do. Do not give safety instructions \
 beyond: downed lines are emergencies, call 911.
 - The app is not affiliated with PG&E; never speak as PG&E.
@@ -161,8 +163,18 @@ def explain_outage(
     if cached is not None:
         return cached
     facts = facts_from_item(item, eta_history)
-    text = llm.generate(SYSTEM_PROMPT, facts.to_prompt()).strip()
+    text = _strip_dashes(llm.generate(SYSTEM_PROMPT, facts.to_prompt()).strip())
     cache.put(key, text)
+    return text
+
+
+def _strip_dashes(text: str) -> str:
+    """Belt-and-suspenders: never let an em/en dash reach the user.
+
+    A stray em dash becomes ", " and an en dash between numbers becomes " to ".
+    """
+    text = text.replace(" — ", ", ").replace("—", ", ")
+    text = text.replace("–", " to ")
     return text
 
 
