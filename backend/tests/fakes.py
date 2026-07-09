@@ -88,10 +88,14 @@ class FakeEtaHistory:
 
 
 class FakeSlo:
-    def __init__(self):
+    def __init__(self, latencies: list[float] | None = None):
         self.events: list[dict] = []
+        self.latencies = latencies or []
 
     def log_dispatch(self, outage_id, kind, feed_updated_at, fetched_at, sent_count) -> None:
         self.events.append(
             {"outage_id": outage_id, "kind": kind, "sent_count": sent_count}
         )
+
+    def recent_latencies(self, hours: int = 24) -> list[float]:
+        return self.latencies

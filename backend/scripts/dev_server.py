@@ -17,10 +17,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import uvicorn
+from tests.fakes import FakeEtaHistory, FakeSlo, FakeStateStore, FakeSubs
 
 from outagewatch.api import main as api_main
 from outagewatch.feeds.pge import normalize
-from tests.fakes import FakeEtaHistory, FakeStateStore, FakeSubs
 
 FIXTURES = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "20260709"
 
@@ -52,6 +52,7 @@ class DevDeps:
         self.state.snapshot = normalize(points=points, points_no_poly=[], polygons=polygons)
         self.subs = FakeSubs()
         self.eta_history = FakeEtaHistory()
+        self.slo = FakeSlo([45.0, 120.0, 310.0])
         self.llm = DevLlm()
         self.explain_cache = DevCache()
 
