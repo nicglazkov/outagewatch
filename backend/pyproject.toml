@@ -1,0 +1,44 @@
+[project]
+name = "outagewatch-backend"
+version = "0.1.0"
+description = "OutageWatch backend: PG&E outage watcher engine and API"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.7",
+    "shapely>=2.0",
+]
+
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.111",
+    "uvicorn>=0.30",
+    "google-cloud-firestore>=2.16",
+    "firebase-admin>=6.5",
+    "anthropic>=0.30",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "ruff>=0.5",
+    "respx>=0.21",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/watcher", "src/outagewatch"]
