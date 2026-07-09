@@ -7,6 +7,7 @@ dependencies = [
     "httpx>=0.27",
     "pydantic>=2.7",
     "shapely>=2.0",
+    "tzdata>=2026.2",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +24,7 @@ dev = [
     "pytest>=8.2",
     "ruff>=0.5",
     "respx>=0.21",
+    "pytest-asyncio>=1.4.0",
 ]
 
 [tool.ruff]
@@ -32,9 +34,14 @@ src = ["src"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+# Depends() in argument defaults is the idiomatic FastAPI dependency pattern.
+"src/outagewatch/api/main.py" = ["B008"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
+asyncio_mode = "strict"
 
 [build-system]
 requires = ["hatchling"]
