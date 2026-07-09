@@ -47,14 +47,35 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    lint {
+        // False positive: fires for any registerForActivityResult when an old
+        // fragment library is on the transitive classpath. We use
+        // ComponentActivity directly; no Fragments exist in this app.
+        disable += "InvalidFragmentVersionForActivityResult"
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    // Release signing reads from local.properties (gitignored): KEYSTORE_FILE,
+    // KEYSTORE_PASSWORD, KEY_ALIAS. Without them the release build is unsigned.
+    signingConfigs {
+        create("release") {
+            if (prop("KEYSTORE_FILE").isNotEmpty()) {
+                storeFile = file(prop("KEYSTORE_FILE"))
+                storePassword = prop("KEYSTORE_PASSWORD")
+                keyAlias = prop("KEY_ALIAS")
+                keyPassword = prop("KEYSTORE_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
+            if (prop("KEYSTORE_FILE").isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
