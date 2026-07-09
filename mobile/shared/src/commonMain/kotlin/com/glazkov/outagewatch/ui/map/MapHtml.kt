@@ -19,6 +19,7 @@ fun buildMapHtml(
     radiusKm: Double,
     outages: List<Outage>,
     dark: Boolean,
+    zoomControl: Boolean = true,
 ): String {
     val features: JsonArray = buildJsonArray {
         outages.forEach { o ->
@@ -65,7 +66,8 @@ var outages = $data;
 var mapEl = document.getElementById('map');
 function sizeMap() { mapEl.style.height = window.innerHeight + 'px'; }
 sizeMap();
-var map = L.map('map', { zoomControl: true }).setView([$centerLat, $centerLon], 11);
+var map = L.map('map', { zoomControl: $zoomControl, attributionControl: $zoomControl })
+  .setView([$centerLat, $centerLon], 11);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 18,
   attribution: '&copy; OpenStreetMap contributors'

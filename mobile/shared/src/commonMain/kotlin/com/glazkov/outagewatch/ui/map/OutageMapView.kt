@@ -18,4 +18,5 @@ expect fun OutageMapView(
     dark: Boolean,
     onOutageTap: (String) -> Unit,
     modifier: Modifier,
+    zoomControl: Boolean = true,
 )

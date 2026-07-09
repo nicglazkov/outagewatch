@@ -24,9 +24,10 @@ actual fun OutageMapView(
     dark: Boolean,
     onOutageTap: (String) -> Unit,
     modifier: Modifier,
+    zoomControl: Boolean,
 ) {
-    val html = remember(centerLat, centerLon, radiusKm, outages, dark) {
-        buildMapHtml(centerLat, centerLon, radiusKm, outages, dark)
+    val html = remember(centerLat, centerLon, radiusKm, outages, dark, zoomControl) {
+        buildMapHtml(centerLat, centerLon, radiusKm, outages, dark, zoomControl)
     }
     val delegate = remember {
         object : NSObject(), WKNavigationDelegateProtocol {

@@ -1,11 +1,12 @@
 package com.glazkov.outagewatch.ui
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.glazkov.outagewatch.ui.theme.CompassTheme
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -15,7 +16,6 @@ import com.glazkov.outagewatch.data.LocationsRepository
 import com.glazkov.outagewatch.ui.add.AddLocationScreen
 import com.glazkov.outagewatch.ui.detail.OutageDetailScreen
 import com.glazkov.outagewatch.ui.home.HomeScreen
-import com.glazkov.outagewatch.ui.nearby.NearbyScreen
 import com.glazkov.outagewatch.ui.settings.SettingsScreen
 import com.glazkov.outagewatch.ui.zip.ZipDetailScreen
 import kotlinx.serialization.Serializable
@@ -28,7 +28,6 @@ object AppGraph {
 
 @Serializable object HomeRoute
 @Serializable object AddLocationRoute
-@Serializable object NearbyRoute
 @Serializable object SettingsRoute
 @Serializable data class DetailRoute(val outageId: String)
 @Serializable data class ZipRoute(
@@ -39,15 +38,17 @@ object AppGraph {
     val radiusKm: Double,
 )
 
-private val Amber = Color(0xFFFFC94A)
-
 @Composable
 fun App() {
+    // Material colors still back a few M3 controls (switches, text fields);
+    // the Compass palette drives the app's look via LocalCompass.
+    val accent = if (isSystemInDarkTheme()) Color(0xFF0A84FF) else Color(0xFF007AFF)
     val colors = if (isSystemInDarkTheme()) {
-        darkColorScheme(primary = Amber, secondary = Amber)
+        darkColorScheme(primary = accent, secondary = accent)
     } else {
-        lightColorScheme(primary = Color(0xFFB07D1A), secondary = Color(0xFFB07D1A))
+        lightColorScheme(primary = accent, secondary = accent)
     }
+    CompassTheme {
     MaterialTheme(colorScheme = colors) {
         val nav = rememberNavController()
         NavHost(navController = nav, startDestination = HomeRoute) {
@@ -59,7 +60,6 @@ fun App() {
                             ZipRoute(loc.zip, loc.label, loc.lat, loc.lon, loc.radiusKm)
                         )
                     },
-                    onOpenNearby = { nav.navigate(NearbyRoute) },
                     onOpenSettings = { nav.navigate(SettingsRoute) },
                 )
             }
@@ -78,12 +78,6 @@ fun App() {
             composable<AddLocationRoute> {
                 AddLocationScreen(onDone = { nav.popBackStack() })
             }
-            composable<NearbyRoute> {
-                NearbyScreen(
-                    onOpenOutage = { nav.navigate(DetailRoute(it)) },
-                    onBack = { nav.popBackStack() },
-                )
-            }
             composable<SettingsRoute> {
                 SettingsScreen(onBack = { nav.popBackStack() })
             }
@@ -92,5 +86,6 @@ fun App() {
                 OutageDetailScreen(outageId = route.outageId, onBack = { nav.popBackStack() })
             }
         }
+    }
     }
 }
