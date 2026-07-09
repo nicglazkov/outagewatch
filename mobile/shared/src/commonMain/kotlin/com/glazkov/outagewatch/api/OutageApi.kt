@@ -16,7 +16,7 @@ import kotlinx.serialization.json.Json
 
 object ApiConfig {
     // Cloud Run URL for the outagewatch-api service; updated at deploy time.
-    var baseUrl: String = "https://outagewatch-api-468206169285.us-west1.run.app"
+    var baseUrl: String = "https://outagewatch-api-7bi2fdpqrq-uw.a.run.app"
 }
 
 class OutageApi(private val client: HttpClient = defaultClient()) {
