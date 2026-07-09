@@ -90,3 +90,11 @@ def test_cache_key_changes_when_outage_updates():
 def test_psps_flag_reaches_prompt():
     facts = facts_from_item(_item(is_psps=True))
     assert '"is_planned_psps_shutoff": true' in facts.to_prompt()
+
+
+def test_em_dashes_stripped_from_output():
+    llm = FakeLlm("The power is out — a pole fire — since 9am. Back 2 to 4pm.")
+    text = explain_outage(_item(), llm, MemoryCache())
+    assert "—" not in text
+    assert "–" not in text
+    assert "The power is out, a pole fire, since 9am." in text

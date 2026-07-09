@@ -91,15 +91,24 @@ function popupHtml(o) {
 var bounds = [];
 outages.forEach(function (o) {
   var color = o.psps ? '#c62828' : '#e65100';
+  var popup = popupHtml(o);
   if (o.geometry) {
-    L.geoJSON({ type: 'Feature', geometry: o.geometry }, {
-      style: { color: color, weight: 2, fillOpacity: 0.15 }
-    }).addTo(map).bindPopup(popupHtml(o));
-  }
-  if (o.lat != null && o.lon != null) {
+    // The affected area itself: draw the polygon as the primary shape.
+    var poly = L.geoJSON({ type: 'Feature', geometry: o.geometry }, {
+      style: { color: color, weight: 2, fillColor: color, fillOpacity: 0.35 }
+    }).addTo(map).bindPopup(popup);
+    poly.eachLayer(function (l) { bounds.push(l.getBounds().getNorthEast(), l.getBounds().getSouthWest()); });
+    // A small dot keeps a tiny device-level polygon findable when zoomed out.
+    if (o.lat != null && o.lon != null) {
+      L.circleMarker([o.lat, o.lon], {
+        radius: 4, color: color, weight: 1, fillColor: color, fillOpacity: 0.9
+      }).addTo(map).bindPopup(popup);
+    }
+  } else if (o.lat != null && o.lon != null) {
+    // No polygon in the feed for this outage: fall back to a point marker.
     L.circleMarker([o.lat, o.lon], {
       radius: 9, color: color, weight: 2, fillColor: color, fillOpacity: 0.6
-    }).addTo(map).bindPopup(popupHtml(o));
+    }).addTo(map).bindPopup(popup);
     bounds.push([o.lat, o.lon]);
   }
 });
