@@ -1,5 +1,6 @@
 package com.glazkov.outagewatch.data
 
+import com.glazkov.outagewatch.api.AddressSuggestion
 import com.glazkov.outagewatch.api.OutageApi
 import com.glazkov.outagewatch.api.SubscriptionRequest
 import com.glazkov.outagewatch.push.PushTokens
@@ -89,6 +90,28 @@ class LocationsRepository(
         )
     }
 
+    /**
+     * Add a suggestion the user picked from autocomplete. It's already resolved
+     * to a point + ZIP + territory status, so this skips geocoding entirely.
+     */
+    suspend fun addSuggestion(
+        suggestion: AddressSuggestion,
+        label: String,
+        force: Boolean = false,
+    ): AddOutcome {
+        suggestion.servedBy?.let { if (!force) return AddOutcome.NotServed(it) }
+        return commit(
+            SavedLocation(
+                zip = suggestion.zip.orEmpty(),
+                label = label.ifBlank { suggestion.title },
+                lat = suggestion.lat,
+                lon = suggestion.lon,
+                radiusKm = 2.0,
+                precise = true,
+            )
+        )
+    }
+
     private suspend fun commit(base: SavedLocation): AddOutcome {
         val location = base.copy(subscriptionId = subscribeFor(base))
         _locations.value = _locations.value.filter { it.id != location.id } + location
@@ -117,7 +140,7 @@ class LocationsRepository(
                 SubscriptionRequest(
                     token = token,
                     platform = platformName(),
-                    zipCode = location.zip,
+                    zipCode = location.zip.takeIf { it.length == 5 },
                     lat = location.lat,
                     lon = location.lon,
                     radiusKm = location.radiusKm,

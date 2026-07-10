@@ -12,16 +12,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,16 +35,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.glazkov.outagewatch.api.AddressSuggestion
 import com.glazkov.outagewatch.data.AddOutcome
 import com.glazkov.outagewatch.data.DeviceLocation
 import com.glazkov.outagewatch.data.LocationResult
 import com.glazkov.outagewatch.ui.AppGraph
 import com.glazkov.outagewatch.ui.detail.NavBar
 import com.glazkov.outagewatch.ui.theme.LocalCompass
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class Mode { Address, Zip }
@@ -57,7 +65,30 @@ fun AddLocationScreen(onDone: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     // Non-PG&E utility name pending a confirm; when set, the button says "Add anyway".
     var warnUtility by remember { mutableStateOf<String?>(null) }
+    // Live autocomplete state.
+    var suggestions by remember { mutableStateOf<List<AddressSuggestion>>(emptyList()) }
+    var picked by remember { mutableStateOf<AddressSuggestion?>(null) }
+    var searching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val focus = LocalFocusManager.current
+    // Bias suggestions toward the user's first saved area, if they have one.
+    val bias = remember { AppGraph.locations.locations.value.firstOrNull() }
+
+    // Debounced autocomplete: re-keys on every keystroke, so the delay below
+    // cancels the previous in-flight query and only the last one lands.
+    LaunchedEffect(address, mode, picked) {
+        if (mode != Mode.Address || picked != null || address.trim().length < 3) {
+            suggestions = emptyList()
+            searching = false
+            return@LaunchedEffect
+        }
+        searching = true
+        delay(180)
+        suggestions = runCatching {
+            AppGraph.api.autocomplete(address.trim(), bias?.lat, bias?.lon)
+        }.getOrDefault(emptyList())
+        searching = false
+    }
 
     fun handle(outcome: AddOutcome) {
         busy = false
@@ -73,20 +104,33 @@ fun AddLocationScreen(onDone: () -> Unit) {
     }
 
     fun submit(force: Boolean) {
+        // Dismiss the keyboard before we navigate away on success; disposing a
+        // focused text field mid-navigation with the IME open can wedge the UI.
+        focus.clearFocus()
         busy = true
         error = null
         scope.launch {
             val outcome = when (mode) {
-                Mode.Address -> AppGraph.locations.addAddress(address, label, force)
+                Mode.Address -> picked?.let { AppGraph.locations.addSuggestion(it, label, force) }
+                    ?: AppGraph.locations.addAddress(address, label, force)
                 Mode.Zip -> AppGraph.locations.addZip(zip, label, force)
             }
             handle(outcome)
         }
     }
 
+    fun choose(s: AddressSuggestion) {
+        picked = s
+        address = s.title
+        suggestions = emptyList()
+        warnUtility = null
+        error = null
+        focus.clearFocus() // dismiss the keyboard on pick, like Google Maps
+    }
+
     Column(Modifier.fillMaxSize().background(c.background)) {
         NavBar("Add an area", onDone)
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
             if (DeviceLocation.available) {
                 LocationButton(locating || busy) {
                     locating = true
@@ -121,7 +165,7 @@ fun AddLocationScreen(onDone: () -> Unit) {
                     mode = Mode.Address; error = null; warnUtility = null
                 }
                 SegTab("ZIP / region", mode == Mode.Zip, Modifier.weight(1f)) {
-                    mode = Mode.Zip; error = null; warnUtility = null
+                    mode = Mode.Zip; error = null; warnUtility = null; suggestions = emptyList()
                 }
             }
             Spacer(Modifier.height(14.dp))
@@ -134,14 +178,24 @@ fun AddLocationScreen(onDone: () -> Unit) {
             if (mode == Mode.Address) {
                 OutlinedTextField(
                     value = address,
-                    onValueChange = { address = it; error = null; warnUtility = null },
+                    onValueChange = { address = it; picked = null; error = null; warnUtility = null },
                     label = { Text("Street address or place") },
                     placeholder = { Text("123 Main St, Santa Rosa") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     colors = fieldColors,
+                    trailingIcon = {
+                        if (searching) {
+                            CircularProgressIndicator(
+                                Modifier.size(18.dp), color = c.secondary, strokeWidth = 2.dp,
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (suggestions.isNotEmpty()) {
+                    SuggestionList(suggestions, ::choose)
+                }
             } else {
                 OutlinedTextField(
                     value = zip,
@@ -186,6 +240,46 @@ fun AddLocationScreen(onDone: () -> Unit) {
                         fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuggestionList(items: List<AddressSuggestion>, onPick: (AddressSuggestion) -> Unit) {
+    val c = LocalCompass.current
+    Spacer(Modifier.height(6.dp))
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card)) {
+        items.forEachIndexed { i, s ->
+            Row(
+                Modifier.fillMaxWidth().clickable { onPick(s) }
+                    .padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Default.LocationOn, contentDescription = null,
+                    tint = if (s.pge) c.accent else c.outage, modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        s.title, color = c.label, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    val sub = if (s.servedBy != null) "${s.subtitle} · not PG&E" else s.subtitle
+                    if (sub.isNotBlank()) {
+                        Text(
+                            sub, color = if (s.servedBy != null) c.outage else c.secondary,
+                            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            if (i != items.lastIndex) {
+                HorizontalDivider(
+                    color = c.separator, thickness = 0.5.dp,
+                    modifier = Modifier.padding(start = 46.dp),
+                )
             }
         }
     }

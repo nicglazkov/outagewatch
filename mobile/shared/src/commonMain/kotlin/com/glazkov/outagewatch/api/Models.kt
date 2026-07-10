@@ -49,6 +49,18 @@ data class ZipInfo(
 )
 
 @Serializable
+data class AddressSuggestion(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val lat: Double,
+    val lon: Double,
+    val zip: String? = null,
+    val pge: Boolean = true,
+    @SerialName("served_by") val servedBy: String? = null,
+)
+
+@Serializable
 data class SubscriptionRequest(
     val token: String,
     val platform: String,
