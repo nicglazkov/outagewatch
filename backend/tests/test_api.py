@@ -49,7 +49,7 @@ def test_list_outages_near_point(client):
     ids = [o["id"] for o in resp.json()]
     assert ids == ["o1"]
     body = resp.json()[0]
-    assert body["cause"] == "POLE FIRE"
+    assert body["cause"] == "Pole fire"  # humanized from "POLE FIRE"
     assert body["geometry"] is None  # not requested
 
 
@@ -111,7 +111,24 @@ def test_zip_lookup_endpoint(client):
     c, _ = client
     body = c.get("/v1/zips/95404").json()
     assert body["zip"] == "95404" and 38 < body["lat"] < 39
+    assert body["pge"] is True and body["served_by"] is None
     assert c.get("/v1/zips/10001").status_code == 404
+
+
+def test_zip_lookup_flags_non_pge_territory(client):
+    c, _ = client
+    body = c.get("/v1/zips/95050").json()  # Santa Clara / SVP
+    assert body["pge"] is False
+    assert "Silicon Valley Power" in body["served_by"]
+
+
+def test_outage_cause_is_humanized(client):
+    c, deps = client
+    item = _outage()
+    item.payload["OUTAGE_CAUSE"] = "BRKN UG EQUIPMNT"
+    deps.state.snapshot = {"o1": item}
+    body = c.get("/v1/outages", params={"lat": 38.45, "lon": -122.71}).json()
+    assert body[0]["cause"] == "Broken underground equipment"
 
 
 def test_internal_poll_hidden_by_default(client):

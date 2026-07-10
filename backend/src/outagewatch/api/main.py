@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 
 from outagewatch import zipcodes
+from outagewatch.causes import humanize_cause
 from outagewatch.config import settings
 from outagewatch.store import StoredSubscription
 from watcher.matcher import Subscription as MatcherSub
@@ -103,7 +104,7 @@ def _to_out(item: Item, include_geometry: bool = False) -> OutageOut:
     p = item.payload
     return OutageOut(
         id=item.id,
-        cause=p.get("OUTAGE_CAUSE"),
+        cause=humanize_cause(p.get("OUTAGE_CAUSE")),
         crew_status=p.get("CREW_CURRENT_STATUS"),
         est_customers=p.get("EST_CUSTOMERS"),
         city=p.get("CITY"),
@@ -230,14 +231,19 @@ async def create_subscription(
 
 @app.get("/v1/zips/{zip_code}")
 async def get_zip(zip_code: str) -> dict[str, Any]:
+    from outagewatch.territory import non_pge_utility
+
     area = zipcodes.lookup(zip_code)
     if area is None:
         raise HTTPException(status_code=404, detail="unknown California ZIP")
+    utility = non_pge_utility(area.zip_code)
     return {
         "zip": area.zip_code,
         "lat": area.lat,
         "lon": area.lon,
         "radius_km": area.radius_km,
+        "pge": utility is None,
+        "served_by": utility,  # null when PG&E (or unknown); a name when not
     }
 
 

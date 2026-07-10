@@ -131,11 +131,13 @@ class ExplainFacts:
 
 
 def facts_from_item(item: Item, eta_history: list[dict[str, Any]] | None = None) -> ExplainFacts:
+    from outagewatch.causes import humanize_cause
+
     p = item.payload
     eta_changes = max(0, len(eta_history or []) - 1)
     return ExplainFacts(
         outage_id=item.id,
-        cause=p.get("OUTAGE_CAUSE"),
+        cause=humanize_cause(p.get("OUTAGE_CAUSE")),
         crew_status=p.get("CREW_CURRENT_STATUS"),
         est_customers=p.get("EST_CUSTOMERS"),
         city=p.get("CITY"),

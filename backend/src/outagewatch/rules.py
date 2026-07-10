@@ -102,14 +102,7 @@ def _eta_phrase(eta: datetime | None) -> str:
     return f"Estimated restoration {eta.strftime('%b %d %I:%M %p').replace(' 0', ' ')} UTC"
 
 
-_CAUSE_MAP = {
-    "PLNND SHUTDOWN": "Planned shutdown",
-    "POLE FIRE": "Pole fire",
-    "UNKNOWN": "Cause under investigation",
-}
-
-
 def _friendly_cause(raw: str | None) -> str | None:
-    if not raw:
-        return None
-    return _CAUSE_MAP.get(raw, raw.capitalize())
+    from outagewatch.causes import humanize_cause
+
+    return humanize_cause(raw)

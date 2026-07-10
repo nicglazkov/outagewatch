@@ -44,6 +44,8 @@ data class ZipInfo(
     val lat: Double,
     val lon: Double,
     @SerialName("radius_km") val radiusKm: Double,
+    val pge: Boolean = true,
+    @SerialName("served_by") val servedBy: String? = null,
 )
 
 @Serializable

@@ -44,7 +44,9 @@ fun ZipDetailScreen(
     radiusKm: Double,
     onOpenOutage: (String) -> Unit,
     onBack: () -> Unit,
-    viewModel: ZipViewModel = viewModel(key = zip) { ZipViewModel(zip, lat, lon, radiusKm) },
+    viewModel: ZipViewModel = viewModel(key = "$zip:$lat,$lon") {
+        ZipViewModel(zip, lat, lon, radiusKm)
+    },
 ) {
     val c = LocalCompass.current
     val state by viewModel.state.collectAsState()
