@@ -58,9 +58,14 @@ fun buildMapHtml(
   /* Height is set from window.innerHeight in JS: both height:100% (parent
      chain collapses) and 100dvh (not resolving on this WebView) yield 0. */
   #map { width:100vw; }
-  .maplibregl-popup-content { padding:10px 12px; border-radius:10px; font: 13px -apple-system, system-ui, sans-serif; }
-  .popup b { font-size: 14px; }
-  .popup a { display:inline-block; margin-top:6px; font-weight:600; color:#0a84ff; text-decoration:none; }
+  .maplibregl-popup-content { padding:12px 14px; border-radius:12px; font: 14px -apple-system, system-ui, sans-serif; }
+  .popup b { font-size: 15px; }
+  /* Full-width, tall tap target for the details link (finger-friendly). */
+  .popup a { display:block; margin-top:8px; padding:9px 0 3px; font-weight:600; font-size:15px; color:#0a84ff; text-decoration:none; }
+  /* Enlarge MapLibre's controls to comfortable touch sizes. */
+  .maplibregl-ctrl-group button { width:42px; height:42px; }
+  .maplibregl-ctrl-group button .maplibregl-ctrl-icon { transform:scale(1.3); }
+  .maplibregl-popup-close-button { width:36px; height:36px; font-size:22px; line-height:34px; }
 </style>
 </head>
 <body>
@@ -171,13 +176,20 @@ map.on('load', function () {
   map.addLayer({ id: 'ow-pt-circle', type: 'circle', source: 'ow-pt',
     paint: { 'circle-radius': ['get', 'r'], 'circle-color': ['get', 'color'], 'circle-opacity': 0.65,
       'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': 1.5 } });
+  // Invisible, finger-sized hit target over each dot so small markers are easy to tap.
+  map.addLayer({ id: 'ow-pt-hit', type: 'circle', source: 'ow-pt',
+    paint: { 'circle-radius': 22, 'circle-color': '#000', 'circle-opacity': 0 } });
 
   map.addSource('ow-center', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'Point', coordinates: [$centerLon, $centerLat] } } });
   map.addLayer({ id: 'ow-center-dot', type: 'circle', source: 'ow-center',
     paint: { 'circle-radius': 4, 'circle-color': '#888' } });
 
   map.on('click', 'ow-poly-fill', function (e) { openPopupFor(e.features[0].properties.id); });
-  map.on('click', 'ow-pt-circle', function (e) { openPopupFor(e.features[0].properties.id); });
+  map.on('click', 'ow-pt-hit', function (e) { openPopupFor(e.features[0].properties.id); });
+  ['ow-poly-fill', 'ow-pt-hit'].forEach(function (layer) {
+    map.on('mouseenter', layer, function () { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', layer, function () { map.getCanvas().style.cursor = ''; });
+  });
 
   // Frame all outages plus the watch center on first paint.
   var fb = new maplibregl.LngLatBounds();
