@@ -25,10 +25,13 @@ actual fun OutageMapView(
     onOutageTap: (String) -> Unit,
     modifier: Modifier,
     zoomControl: Boolean,
+    focusToken: String?,
 ) {
     val html = remember(centerLat, centerLon, radiusKm, outages, dark, zoomControl) {
         buildMapHtml(centerLat, centerLon, radiusKm, outages, dark, zoomControl)
     }
+    val lastHtml = remember { arrayOfNulls<String>(1) }
+    val lastFocus = remember { arrayOfNulls<String>(1) }
     val delegate = remember {
         object : NSObject(), WKNavigationDelegateProtocol {
             override fun webView(
@@ -54,7 +57,21 @@ actual fun OutageMapView(
             }
         },
         update = { webView ->
-            webView.loadHTMLString(html, baseURL = NSURL(string = "https://outagewatch.local/"))
+            // Only reload when the page content changes; otherwise the map
+            // restarts mid-interaction. A focus tap just calls into the page.
+            if (lastHtml[0] != html) {
+                lastHtml[0] = html
+                webView.loadHTMLString(html, baseURL = NSURL(string = "https://outagewatch.local/"))
+                lastFocus[0] = null
+            }
+            if (focusToken != null && focusToken != lastFocus[0]) {
+                lastFocus[0] = focusToken
+                val id = focusToken.substringBefore('#')
+                    .replace("\\", "\\\\").replace("'", "\\'")
+                webView.evaluateJavaScript(
+                    "window.focusOutage && window.focusOutage('$id')", null
+                )
+            }
         },
     )
 }

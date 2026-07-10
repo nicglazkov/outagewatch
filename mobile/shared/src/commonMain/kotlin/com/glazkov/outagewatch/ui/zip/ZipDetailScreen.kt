@@ -19,6 +19,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +54,10 @@ fun ZipDetailScreen(
     val c = LocalCompass.current
     val state by viewModel.state.collectAsState()
     val dark = isSystemInDarkTheme()
+    // Tapping an outage row flies the map to it (below) instead of navigating.
+    // Token is "<id>#<nonce>" so tapping the same row again re-triggers the fly.
+    var focusToken by remember { mutableStateOf<String?>(null) }
+    val focusNonce = remember { intArrayOf(0) }
 
     Column(Modifier.fillMaxSize().background(c.background)) {
         NavBar(label, onBack)
@@ -66,6 +73,7 @@ fun ZipDetailScreen(
                 centerLat = lat, centerLon = lon, radiusKm = radiusKm,
                 outages = state.areaOutages.map { it.outage }, dark = dark,
                 onOutageTap = onOpenOutage, modifier = Modifier.fillMaxSize(),
+                focusToken = focusToken,
             )
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -98,7 +106,10 @@ fun ZipDetailScreen(
                             trailingColor = if (entry.inZip) c.outage else c.secondary,
                             chevron = true,
                             showSeparator = i != state.areaOutages.lastIndex,
-                            onClick = { onOpenOutage(o.id) },
+                            onClick = {
+                                focusNonce[0]++
+                                focusToken = "${o.id}#${focusNonce[0]}"
+                            },
                         )
                     }
                 }

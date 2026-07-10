@@ -91,6 +91,7 @@ function popupHtml(o) {
 }
 
 var bounds = [];
+var layersById = {};  // outage id -> { layer (for popup), focus() } so a list tap can fly here
 outages.forEach(function (o) {
   var color = o.psps ? '#c62828' : '#e65100';
   var popup = popupHtml(o);
@@ -100,6 +101,10 @@ outages.forEach(function (o) {
       style: { color: color, weight: 2, fillColor: color, fillOpacity: 0.35 }
     }).addTo(map).bindPopup(popup);
     poly.eachLayer(function (l) { bounds.push(l.getBounds().getNorthEast(), l.getBounds().getSouthWest()); });
+    layersById[o.id] = { layer: poly, focus: function () {
+      try { map.flyToBounds(poly.getBounds(), { maxZoom: 15, padding: [50, 50] }); }
+      catch (e) { if (o.lat != null) map.flyTo([o.lat, o.lon], 14); }
+    } };
     // A small dot keeps a tiny device-level polygon findable when zoomed out.
     if (o.lat != null && o.lon != null) {
       L.circleMarker([o.lat, o.lon], {
@@ -108,14 +113,23 @@ outages.forEach(function (o) {
     }
   } else if (o.lat != null && o.lon != null) {
     // No polygon in the feed for this outage: fall back to a point marker.
-    L.circleMarker([o.lat, o.lon], {
+    var mk = L.circleMarker([o.lat, o.lon], {
       radius: 9, color: color, weight: 2, fillColor: color, fillOpacity: 0.6
     }).addTo(map).bindPopup(popup);
+    layersById[o.id] = { layer: mk, focus: function () { map.flyTo([o.lat, o.lon], 15); } };
     bounds.push([o.lat, o.lon]);
   }
 });
 bounds.push([$centerLat, $centerLon]);
 if (bounds.length > 1) { map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 }); }
+
+// Called from the host (list tap): fly to an outage and open its popup.
+window.focusOutage = function (id) {
+  var e = layersById[id];
+  if (!e) return;
+  e.focus();
+  if (e.layer) { setTimeout(function () { e.layer.openPopup(); }, 320); }
+};
 
 // The WebView often reports its final height after Leaflet initializes;
 // resize the map element and recompute tile layout once layout settles.
