@@ -1,7 +1,12 @@
-"""Photon suggestion normalization + nearest-ZIP snapping (no network)."""
+"""Photon + Census suggestion normalization + nearest-ZIP snapping (no network)."""
 
 from outagewatch import zipcodes
-from outagewatch.geocode import to_suggestion
+from outagewatch.geocode import (
+    _census_query,
+    _titlecase_street,
+    census_to_suggestion,
+    to_suggestion,
+)
 
 
 def _feature(lat, lon, **props):
@@ -91,3 +96,33 @@ def test_nearest_returns_zip_and_distance():
     assert got is not None
     assert got.zip_code == "95404"
     assert km < 0.001
+
+
+# --- Census geocoder (covers house numbers OSM/Photon lacks) ---
+
+
+def _census_match(matched, lat, lon):
+    return {"matchedAddress": matched, "coordinates": {"x": lon, "y": lat}}
+
+
+def test_census_match_parses_to_suggestion():
+    # Generic public example (Santa Rosa City Hall block), never a private address.
+    area = zipcodes.lookup("95404")
+    s = census_to_suggestion(
+        _census_match("100 SANTA ROSA AVE, SANTA ROSA, CA, 95404", area.lat, area.lon)
+    )
+    assert s is not None
+    assert s.title == "100 Santa Rosa Ave"
+    assert s.subtitle == "Santa Rosa, California, 95404"
+    assert s.zip_code == "95404"
+    assert s.pge is True
+    assert s.id.startswith("census:")  # id is coordinate-based, holds no address text
+
+
+def test_census_titlecase_keeps_ordinals():
+    assert _titlecase_street("175 SOUTH 23RD STREET") == "175 South 23rd Street"
+
+
+def test_census_query_appends_state_only_when_missing():
+    assert _census_query("123 main st").endswith(", CA")
+    assert _census_query("123 main st, santa rosa ca") == "123 main st, santa rosa ca"
