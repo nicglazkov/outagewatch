@@ -13,7 +13,7 @@ data class AreaOutage(val outage: Outage, val distanceKm: Double, val inZip: Boo
 
 data class ZipState(
     val loading: Boolean = true,
-    val contextRadiusKm: Double = 40.0,
+    val contextRadiusKm: Double = 0.0,
     val areaOutages: List<AreaOutage> = emptyList(),
 )
 
@@ -32,7 +32,9 @@ class ZipViewModel(
     }
 
     private suspend fun load() {
-        val contextRadius = 40.0
+        // "Nearby" scales with the area's own size: your area plus an 8km ring,
+        // so a small ZIP like Los Altos doesn't surface outages a metro away.
+        val contextRadius = radiusKm + 8.0
         val outages = runCatching {
             AppGraph.api.outagesNear(lat, lon, contextRadius, includeGeometry = true)
         }.getOrDefault(emptyList())
