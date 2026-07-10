@@ -3,15 +3,15 @@ package com.glazkov.outagewatch.ui.map
 import com.glazkov.outagewatch.api.Outage
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * Self-contained Leaflet map page. Tiles from OpenStreetMap, outage markers
- * and polygons injected as JSON. Tapping "Details" in a popup navigates to
- * ow://outage/{id}, which the host WebView intercepts.
+ * Self-contained MapLibre GL page. Vector tiles from OpenFreeMap (free, no key,
+ * real light/dark styles), outage markers and polygons drawn as GeoJSON layers.
+ * Tapping "Details" in a popup navigates to ow://outage/{id}, which the host
+ * WebView intercepts. window.focusOutage(id) flies to an outage on a list tap.
  */
 fun buildMapHtml(
     centerLat: Double,
@@ -39,7 +39,11 @@ fun buildMapHtml(
     }
     val data = Json.encodeToString(JsonArray.serializer(), features)
     val bg = if (dark) "#111" else "#fff"
-    val tileFilter = if (dark) "filter: brightness(0.7) invert(1) hue-rotate(180deg);" else ""
+    val styleUrl = if (dark) {
+        "https://tiles.openfreemap.org/styles/dark"
+    } else {
+        "https://tiles.openfreemap.org/styles/positron"
+    }
 
     return """
 <!DOCTYPE html>
@@ -47,16 +51,16 @@ fun buildMapHtml(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
   html, body { margin:0; padding:0; background:$bg; }
   /* Height is set from window.innerHeight in JS: both height:100% (parent
      chain collapses) and 100dvh (not resolving on this WebView) yield 0. */
   #map { width:100vw; }
-  .leaflet-tile { $tileFilter }
+  .maplibregl-popup-content { padding:10px 12px; border-radius:10px; font: 13px -apple-system, system-ui, sans-serif; }
   .popup b { font-size: 14px; }
-  .popup a { display:inline-block; margin-top:6px; font-weight:600; }
+  .popup a { display:inline-block; margin-top:6px; font-weight:600; color:#0a84ff; text-decoration:none; }
 </style>
 </head>
 <body>
@@ -66,18 +70,17 @@ var outages = $data;
 var mapEl = document.getElementById('map');
 function sizeMap() { mapEl.style.height = window.innerHeight + 'px'; }
 sizeMap();
-var map = L.map('map', { zoomControl: $zoomControl, attributionControl: $zoomControl })
-  .setView([$centerLat, $centerLon], 11);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 18,
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
 
-L.circle([$centerLat, $centerLon], {
-  radius: ${radiusKm * 1000},
-  color: '#888', weight: 1, fillOpacity: 0.05, dashArray: '6 6'
-}).addTo(map);
-L.circleMarker([$centerLat, $centerLon], { radius: 4, color: '#888' }).addTo(map);
+var map = new maplibregl.Map({
+  container: 'map',
+  style: '$styleUrl',
+  center: [$centerLon, $centerLat],
+  zoom: 11,
+  attributionControl: false
+});
+// OpenFreeMap's style carries its own attribution; compact keeps it a small "i".
+map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+if ($zoomControl) { map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left'); }
 
 function popupHtml(o) {
   var eta = o.eta ? new Date(o.eta).toLocaleString('en-US', {
@@ -90,51 +93,104 @@ function popupHtml(o) {
     + '<br><a href="ow://outage/' + o.id + '">Details &rarr;</a></div>';
 }
 
-var bounds = [];
-var layersById = {};  // outage id -> { layer (for popup), focus() } so a list tap can fly here
+// Walk every [lon,lat] of a GeoJSON geometry (Polygon/MultiPolygon/Point/Line).
+function geomWalk(g, cb) {
+  var c = g.coordinates;
+  function ring(r) { r.forEach(function (pt) { cb(pt[0], pt[1]); }); }
+  if (g.type === 'Polygon') { c.forEach(ring); }
+  else if (g.type === 'MultiPolygon') { c.forEach(function (poly) { poly.forEach(ring); }); }
+  else if (g.type === 'LineString') { ring(c); }
+  else if (g.type === 'Point') { cb(c[0], c[1]); }
+}
+
+// A geographic circle as a GeoJSON polygon (MapLibre has no native circle).
+function circlePolygon(lon, lat, km, n) {
+  n = n || 64;
+  var coords = [];
+  var latDeg = km / 111.32;
+  var lonDeg = km / (111.32 * Math.cos(lat * Math.PI / 180));
+  for (var i = 0; i <= n; i++) {
+    var t = (i / n) * 2 * Math.PI;
+    coords.push([lon + lonDeg * Math.cos(t), lat + latDeg * Math.sin(t)]);
+  }
+  return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] } };
+}
+
+var byId = {};          // outage id -> { bounds?, lngLat, html } for focus + popup
+var polyFeatures = [];
+var pointFeatures = [];
 outages.forEach(function (o) {
   var color = o.psps ? '#c62828' : '#e65100';
-  var popup = popupHtml(o);
+  var html = popupHtml(o);
   if (o.geometry) {
-    // The affected area itself: draw the polygon as the primary shape.
-    var poly = L.geoJSON({ type: 'Feature', geometry: o.geometry }, {
-      style: { color: color, weight: 2, fillColor: color, fillOpacity: 0.35 }
-    }).addTo(map).bindPopup(popup);
-    poly.eachLayer(function (l) { bounds.push(l.getBounds().getNorthEast(), l.getBounds().getSouthWest()); });
-    layersById[o.id] = { layer: poly, focus: function () {
-      try { map.flyToBounds(poly.getBounds(), { maxZoom: 15, padding: [50, 50] }); }
-      catch (e) { if (o.lat != null) map.flyTo([o.lat, o.lon], 14); }
-    } };
+    polyFeatures.push({ type: 'Feature', properties: { id: o.id, color: color }, geometry: o.geometry });
+    var b = new maplibregl.LngLatBounds();
+    geomWalk(o.geometry, function (lon, lat) { b.extend([lon, lat]); });
+    var ctr = b.getCenter();
+    byId[o.id] = { bounds: b, lngLat: [ctr.lng, ctr.lat], html: html };
     // A small dot keeps a tiny device-level polygon findable when zoomed out.
     if (o.lat != null && o.lon != null) {
-      L.circleMarker([o.lat, o.lon], {
-        radius: 4, color: color, weight: 1, fillColor: color, fillOpacity: 0.9
-      }).addTo(map).bindPopup(popup);
+      pointFeatures.push({ type: 'Feature', properties: { id: o.id, color: color, r: 4 }, geometry: { type: 'Point', coordinates: [o.lon, o.lat] } });
     }
   } else if (o.lat != null && o.lon != null) {
-    // No polygon in the feed for this outage: fall back to a point marker.
-    var mk = L.circleMarker([o.lat, o.lon], {
-      radius: 9, color: color, weight: 2, fillColor: color, fillOpacity: 0.6
-    }).addTo(map).bindPopup(popup);
-    layersById[o.id] = { layer: mk, focus: function () { map.flyTo([o.lat, o.lon], 15); } };
-    bounds.push([o.lat, o.lon]);
+    pointFeatures.push({ type: 'Feature', properties: { id: o.id, color: color, r: 9 }, geometry: { type: 'Point', coordinates: [o.lon, o.lat] } });
+    byId[o.id] = { lngLat: [o.lon, o.lat], html: html };
   }
 });
-bounds.push([$centerLat, $centerLon]);
-if (bounds.length > 1) { map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 }); }
+
+var activePopup = null;
+function openPopupFor(id) {
+  var e = byId[id];
+  if (!e) return;
+  if (activePopup) activePopup.remove();
+  activePopup = new maplibregl.Popup({ maxWidth: '260px' })
+    .setLngLat(e.lngLat).setHTML(e.html).addTo(map);
+}
 
 // Called from the host (list tap): fly to an outage and open its popup.
 window.focusOutage = function (id) {
-  var e = layersById[id];
+  var e = byId[id];
   if (!e) return;
-  e.focus();
-  if (e.layer) { setTimeout(function () { e.layer.openPopup(); }, 320); }
+  if (e.bounds) { map.fitBounds(e.bounds, { padding: 60, maxZoom: 16, duration: 700 }); }
+  else { map.flyTo({ center: e.lngLat, zoom: 15, duration: 700 }); }
+  setTimeout(function () { openPopupFor(id); }, 750);
 };
 
-// The WebView often reports its final height after Leaflet initializes;
-// resize the map element and recompute tile layout once layout settles.
-setTimeout(function () { sizeMap(); map.invalidateSize(); }, 250);
-window.addEventListener('resize', function () { sizeMap(); map.invalidateSize(); });
+map.on('load', function () {
+  map.addSource('ow-circle', { type: 'geojson', data: circlePolygon($centerLon, $centerLat, $radiusKm) });
+  map.addLayer({ id: 'ow-circle-line', type: 'line', source: 'ow-circle',
+    paint: { 'line-color': '#888', 'line-width': 1, 'line-dasharray': [2, 2] } });
+
+  map.addSource('ow-poly', { type: 'geojson', data: { type: 'FeatureCollection', features: polyFeatures } });
+  map.addLayer({ id: 'ow-poly-fill', type: 'fill', source: 'ow-poly',
+    paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.35 } });
+  map.addLayer({ id: 'ow-poly-line', type: 'line', source: 'ow-poly',
+    paint: { 'line-color': ['get', 'color'], 'line-width': 2 } });
+
+  map.addSource('ow-pt', { type: 'geojson', data: { type: 'FeatureCollection', features: pointFeatures } });
+  map.addLayer({ id: 'ow-pt-circle', type: 'circle', source: 'ow-pt',
+    paint: { 'circle-radius': ['get', 'r'], 'circle-color': ['get', 'color'], 'circle-opacity': 0.65,
+      'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': 1.5 } });
+
+  map.addSource('ow-center', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'Point', coordinates: [$centerLon, $centerLat] } } });
+  map.addLayer({ id: 'ow-center-dot', type: 'circle', source: 'ow-center',
+    paint: { 'circle-radius': 4, 'circle-color': '#888' } });
+
+  map.on('click', 'ow-poly-fill', function (e) { openPopupFor(e.features[0].properties.id); });
+  map.on('click', 'ow-pt-circle', function (e) { openPopupFor(e.features[0].properties.id); });
+
+  // Frame all outages plus the watch center on first paint.
+  var fb = new maplibregl.LngLatBounds();
+  fb.extend([$centerLon, $centerLat]);
+  pointFeatures.forEach(function (f) { fb.extend(f.geometry.coordinates); });
+  polyFeatures.forEach(function (f) { geomWalk(f.geometry, function (lon, lat) { fb.extend([lon, lat]); }); });
+  if (pointFeatures.length || polyFeatures.length) {
+    map.fitBounds(fb, { padding: 40, maxZoom: 13, duration: 0 });
+  }
+  setTimeout(function () { sizeMap(); map.resize(); }, 250);
+});
+
+window.addEventListener('resize', function () { sizeMap(); map.resize(); });
 </script>
 </body>
 </html>
