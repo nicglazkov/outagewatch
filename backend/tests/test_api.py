@@ -37,9 +37,48 @@ def _outage(oid="o1", lat=38.44, lon=-122.71):
     )
 
 
+class FakeGeocoder:
+    def __init__(self, hits):
+        self.hits = hits
+        self.calls = []
+
+    async def autocomplete(self, q, lat=None, lon=None, limit=6):
+        self.calls.append((q, lat, lon))
+        return self.hits
+
+
 def test_healthz(client):
     c, _ = client
     assert c.get("/healthz").json() == {"status": "ok"}
+
+
+def test_autocomplete_endpoint_returns_suggestions(client):
+    c, deps = client
+    from outagewatch.geocode import Suggestion
+
+    deps.geocoder = FakeGeocoder(
+        [
+            Suggestion(
+                id="N1",
+                title="1017 Pacific Avenue",
+                subtitle="Santa Rosa, California, 95404",
+                lat=38.44,
+                lon=-122.71,
+                zip_code="95404",
+                pge=True,
+                served_by=None,
+            )
+        ]
+    )
+    resp = c.get(
+        "/v1/geocode/autocomplete", params={"q": "1017 pac", "lat": 38.4, "lon": -122.7}
+    )
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["title"] == "1017 Pacific Avenue"
+    assert body[0]["zip"] == "95404"
+    assert body[0]["pge"] is True
+    assert deps.geocoder.calls == [("1017 pac", 38.4, -122.7)]
 
 
 def test_list_outages_near_point(client):

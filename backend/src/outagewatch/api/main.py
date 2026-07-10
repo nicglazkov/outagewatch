@@ -58,6 +58,10 @@ class Deps:
         self.llm = AnthropicClient(cfg.anthropic_model)
         self.explain_cache = FirestoreExplainCache(cfg.project_id)
 
+        from outagewatch.geocode import Photon
+
+        self.geocoder = Photon()
+
 
 @lru_cache(maxsize=1)
 def get_deps() -> Deps:
@@ -227,6 +231,42 @@ async def create_subscription(
     sub = StoredSubscription(id=uuid.uuid4().hex, **data)
     deps.subs.upsert(sub)
     return {"id": sub.id}
+
+
+class SuggestionOut(BaseModel):
+    id: str
+    title: str
+    subtitle: str
+    lat: float
+    lon: float
+    zip: str | None = None
+    pge: bool = True
+    served_by: str | None = None
+
+
+@app.get("/v1/geocode/autocomplete", response_model=list[SuggestionOut])
+async def geocode_autocomplete(
+    q: str = Query(min_length=1, max_length=120),
+    lat: float | None = Query(default=None, ge=32.0, le=42.5),
+    lon: float | None = Query(default=None, ge=-125.0, le=-114.0),
+    deps: Deps = Depends(get_deps),
+) -> list[SuggestionOut]:
+    """Google-Maps-style address suggestions, biased to the caller's location and
+    kept to California. Each hit is pre-resolved to a ZIP + territory status."""
+    hits = await deps.geocoder.autocomplete(q, lat, lon)
+    return [
+        SuggestionOut(
+            id=s.id,
+            title=s.title,
+            subtitle=s.subtitle,
+            lat=s.lat,
+            lon=s.lon,
+            zip=s.zip_code,
+            pge=s.pge,
+            served_by=s.served_by,
+        )
+        for s in hits
+    ]
 
 
 @app.get("/v1/zips/{zip_code}")
