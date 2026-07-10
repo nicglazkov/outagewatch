@@ -24,10 +24,14 @@ actual fun OutageMapView(
     onOutageTap: (String) -> Unit,
     modifier: Modifier,
     zoomControl: Boolean,
+    focusToken: String?,
 ) {
     val html = remember(centerLat, centerLon, radiusKm, outages, dark, zoomControl) {
         buildMapHtml(centerLat, centerLon, radiusKm, outages, dark, zoomControl)
     }
+    // Holds the last focus token applied to the live page so a repeated
+    // recomposition doesn't re-fly, but a new tap (new nonce) does.
+    val lastFocus = remember { arrayOfNulls<String>(1) }
     AndroidView(
         modifier = modifier,
         factory = { context ->
@@ -66,6 +70,15 @@ actual fun OutageMapView(
                 webView.tag = html
                 webView.loadDataWithBaseURL(
                     "https://outagewatch.local/", html, "text/html", "utf-8", null
+                )
+                lastFocus[0] = null // fresh page; allow the current focus to re-apply
+            }
+            if (focusToken != null && focusToken != lastFocus[0]) {
+                lastFocus[0] = focusToken
+                val id = focusToken.substringBefore('#')
+                    .replace("\\", "\\\\").replace("'", "\\'")
+                webView.evaluateJavascript(
+                    "window.focusOutage && window.focusOutage('$id')", null
                 )
             }
         },

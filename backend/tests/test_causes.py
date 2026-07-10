@@ -8,6 +8,7 @@ def test_known_codes_become_plain_english():
     assert humanize_cause("BRKN UG EQUIPMNT") == "Broken underground equipment"
     assert humanize_cause("PLNND SHUTDOWN") == "Planned shutdown"
     assert humanize_cause("3RD PARTY") == "Damage caused by someone else"
+    assert humanize_cause("THRD PARTY") == "Damage caused by someone else"
     assert humanize_cause("EMERG REPAIRS") == "Emergency repairs"
     assert humanize_cause("UNKNOWN") == "Cause under investigation"
 
