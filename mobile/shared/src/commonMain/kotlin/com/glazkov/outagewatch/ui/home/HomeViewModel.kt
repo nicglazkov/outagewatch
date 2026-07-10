@@ -53,7 +53,12 @@ class HomeViewModel : ViewModel() {
         }
         val statuses = saved.map { location ->
             runCatching {
-                LocationStatus(location, api.outagesForZip(location.zip))
+                // Coordinates work for both ZIP regions (centroid) and precise
+                // addresses (exact point), so one path serves both.
+                LocationStatus(
+                    location,
+                    api.outagesNear(location.lat, location.lon, location.radiusKm),
+                )
             }.getOrElse { LocationStatus(location, error = true) }
         }
         // Center the hero map on the first area affected, else the first area.

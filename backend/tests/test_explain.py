@@ -61,7 +61,7 @@ def test_eta_changes_counted_from_history():
 def test_prompt_contains_all_facts_and_only_facts():
     facts = facts_from_item(_item(), None)
     prompt = facts.to_prompt()
-    assert "POLE FIRE" in prompt
+    assert "Pole fire" in prompt  # humanized from "POLE FIRE"
     assert "120" in prompt
     assert "Santa Rosa" in prompt
     assert "the only facts you may use" in prompt

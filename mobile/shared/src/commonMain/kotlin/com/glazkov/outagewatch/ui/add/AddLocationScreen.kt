@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.glazkov.outagewatch.data.AddOutcome
 import com.glazkov.outagewatch.data.DeviceLocation
 import com.glazkov.outagewatch.data.LocationResult
 import com.glazkov.outagewatch.ui.AppGraph
@@ -42,101 +43,121 @@ import com.glazkov.outagewatch.ui.detail.NavBar
 import com.glazkov.outagewatch.ui.theme.LocalCompass
 import kotlinx.coroutines.launch
 
+private enum class Mode { Address, Zip }
+
 @Composable
 fun AddLocationScreen(onDone: () -> Unit) {
     val c = LocalCompass.current
+    var mode by remember { mutableStateOf(if (DeviceLocation.available) Mode.Address else Mode.Zip) }
+    var address by remember { mutableStateOf("") }
     var zip by remember { mutableStateOf("") }
     var label by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var locating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Non-PG&E utility name pending a confirm; when set, the button says "Add anyway".
+    var warnUtility by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    fun add(useZip: String, useLabel: String) {
+    fun handle(outcome: AddOutcome) {
+        busy = false
+        when (outcome) {
+            is AddOutcome.Added -> onDone()
+            is AddOutcome.NotServed -> {
+                warnUtility = outcome.utility
+                error = "This area is served by ${outcome.utility}, not PG&E. " +
+                    "OutageWatch won't show outages here."
+            }
+            is AddOutcome.Failed -> error = outcome.message
+        }
+    }
+
+    fun submit(force: Boolean) {
         busy = true
+        error = null
         scope.launch {
-            val result = AppGraph.locations.addZip(useZip, useLabel)
-            busy = false
-            result.fold(
-                onSuccess = { onDone() },
-                onFailure = { error = it.message ?: "Something went wrong" },
-            )
+            val outcome = when (mode) {
+                Mode.Address -> AppGraph.locations.addAddress(address, label, force)
+                Mode.Zip -> AppGraph.locations.addZip(zip, label, force)
+            }
+            handle(outcome)
         }
     }
 
     Column(Modifier.fillMaxSize().background(c.background)) {
         NavBar("Add an area", onDone)
         Column(Modifier.padding(16.dp)) {
-            // One-tap: find the user's ZIP from GPS. Easiest path for anyone.
             if (DeviceLocation.available) {
-                Box(
-                    Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(14.dp))
-                        .background(c.accent)
-                        .clickable(enabled = !locating && !busy) {
-                            locating = true
-                            error = null
-                            scope.launch {
-                                when (val r = DeviceLocation.currentZip()) {
-                                    is LocationResult.Found -> { locating = false; add(r.zip, "Home") }
-                                    LocationResult.PermissionDenied -> {
-                                        locating = false
-                                        error = "Location permission is off. Enter your ZIP below."
-                                    }
-                                    LocationResult.Unavailable -> {
-                                        locating = false
-                                        error = "Couldn't find your location. Enter your ZIP below."
-                                    }
-                                }
+                LocationButton(locating || busy) {
+                    locating = true
+                    error = null
+                    warnUtility = null
+                    scope.launch {
+                        when (val r = DeviceLocation.currentZip()) {
+                            is LocationResult.Found -> {
+                                locating = false
+                                busy = true
+                                handle(AppGraph.locations.addZip(r.zip, "Home"))
                             }
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (locating) {
-                        CircularProgressIndicator(
-                            Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp
-                        )
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "Use my current location", color = Color.White,
-                                fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                            )
+                            LocationResult.PermissionDenied -> {
+                                locating = false
+                                error = "Location permission is off. Add an address or ZIP below."
+                            }
+                            LocationResult.Unavailable -> {
+                                locating = false
+                                error = "Couldn't find your location. Add an address or ZIP below."
+                            }
                         }
                     }
                 }
-                Spacer(Modifier.height(14.dp))
-                Text("or enter a ZIP", color = c.secondary, fontSize = 13.sp)
-                Spacer(Modifier.height(12.dp))
-            } else {
-                Text(
-                    "Enter a California ZIP code in PG&E territory. You'll get a push " +
-                        "notification when an outage starts, when the estimate changes, and " +
-                        "when power is back.",
-                    color = c.secondary, fontSize = 14.sp,
-                )
                 Spacer(Modifier.height(16.dp))
             }
+
+            // Address vs ZIP toggle.
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.card).padding(3.dp),
+            ) {
+                SegTab("Address", mode == Mode.Address, Modifier.weight(1f)) {
+                    mode = Mode.Address; error = null; warnUtility = null
+                }
+                SegTab("ZIP / region", mode == Mode.Zip, Modifier.weight(1f)) {
+                    mode = Mode.Zip; error = null; warnUtility = null
+                }
+            }
+            Spacer(Modifier.height(14.dp))
 
             val fieldColors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = c.card, unfocusedContainerColor = c.card,
                 focusedBorderColor = c.accent, unfocusedBorderColor = c.separator,
-                focusedTextColor = c.label, unfocusedTextColor = c.label,
-                cursorColor = c.accent,
+                focusedTextColor = c.label, unfocusedTextColor = c.label, cursorColor = c.accent,
             )
-            OutlinedTextField(
-                value = zip,
-                onValueChange = { zip = it.filter(Char::isDigit).take(5); error = null },
-                label = { Text("ZIP code") },
-                isError = error != null,
-                supportingText = { error?.let { Text(it, color = c.outage) } },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                shape = RoundedCornerShape(12.dp),
-                colors = fieldColors,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (mode == Mode.Address) {
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it; error = null; warnUtility = null },
+                    label = { Text("Street address or place") },
+                    placeholder = { Text("123 Main St, Santa Rosa") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = fieldColors,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                OutlinedTextField(
+                    value = zip,
+                    onValueChange = { zip = it.filter(Char::isDigit).take(5); error = null; warnUtility = null },
+                    label = { Text("ZIP code") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = fieldColors,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            error?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(it, color = c.outage, fontSize = 13.sp)
+            }
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(
                 value = label,
@@ -148,23 +169,63 @@ fun AddLocationScreen(onDone: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(18.dp))
-            val enabled = zip.length == 5 && !busy && !locating
+            val ready = if (mode == Mode.Address) address.isNotBlank() else zip.length == 5
+            val enabled = ready && !busy && !locating
             Box(
                 Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp))
-                    .background(if (enabled) c.accent else c.separator)
-                    .clickable(enabled = enabled) { add(zip, label) },
+                    .background(if (enabled) (if (warnUtility != null) c.outage else c.accent) else c.separator)
+                    .clickable(enabled = enabled) { submit(force = warnUtility != null) },
                 contentAlignment = Alignment.Center,
             ) {
                 if (busy && !locating) {
                     CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
                 } else {
                     Text(
-                        "Watch this area",
+                        if (warnUtility != null) "Add anyway" else "Watch this area",
                         color = if (enabled) Color.White else c.secondary,
                         fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LocationButton(loading: Boolean, onClick: () -> Unit) {
+    val c = LocalCompass.current
+    Box(
+        Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(14.dp)).background(c.accent)
+            .clickable(enabled = !loading) { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (loading) {
+            CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Use my current location", color = Color.White,
+                    fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SegTab(text: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val c = LocalCompass.current
+    Box(
+        modifier.clip(RoundedCornerShape(8.dp))
+            .background(if (selected) c.background else Color.Transparent)
+            .clickable { onClick() }.padding(vertical = 9.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text, color = if (selected) c.label else c.secondary,
+            fontSize = 14.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+        )
     }
 }

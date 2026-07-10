@@ -10,6 +10,7 @@ import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.glazkov.outagewatch.data.GeoResult
 import com.glazkov.outagewatch.data.LocationFinder
 import com.glazkov.outagewatch.data.LocationResult
 import kotlin.coroutines.resume
@@ -36,6 +37,21 @@ class AndroidLocationFinder(private val activity: ComponentActivity) : LocationF
         val location = lastLocation() ?: return LocationResult.Unavailable
         val zip = reverseGeocodeZip(location) ?: return LocationResult.Unavailable
         return LocationResult.Found(zip)
+    }
+
+    override suspend fun geocodeAddress(query: String): GeoResult? {
+        val geocoder = Geocoder(activity)
+        val address = if (Build.VERSION.SDK_INT >= 33) {
+            suspendCancellableCoroutine { cont ->
+                geocoder.getFromLocationName(query, 1) { results -> cont.resume(results.firstOrNull()) }
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            runCatching { geocoder.getFromLocationName(query, 1)?.firstOrNull() }.getOrNull()
+        } ?: return null
+        val zip = address.postalCode?.take(5) ?: return null
+        val name = address.getAddressLine(0) ?: query
+        return GeoResult(address.latitude, address.longitude, zip, name)
     }
 
     private fun hasPermission(): Boolean {

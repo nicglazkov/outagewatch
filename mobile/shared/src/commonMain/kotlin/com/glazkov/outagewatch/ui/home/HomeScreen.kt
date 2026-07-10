@@ -34,6 +34,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -143,12 +144,16 @@ fun HomeScreen(
                             .clip(RoundedCornerShape(14.dp)).background(c.card),
                     ) {
                         state.locations.forEachIndexed { i, status ->
-                            RemovableAreaCell(
-                                status = status,
-                                last = i == state.locations.lastIndex,
-                                onOpenZip = onOpenZip,
-                                onRemove = { scope.launch { AppGraph.locations.remove(status.location) } },
-                            )
+                            key(status.location.id) {
+                                RemovableAreaCell(
+                                    status = status,
+                                    last = i == state.locations.lastIndex,
+                                    onOpenZip = onOpenZip,
+                                    onRemove = {
+                                        scope.launch { AppGraph.locations.remove(status.location) }
+                                    },
+                                )
+                            }
                         }
                     }
                     GroupedFootnote(DISCLAIMER)

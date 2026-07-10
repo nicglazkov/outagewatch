@@ -7,13 +7,17 @@ sealed interface LocationResult {
     data object Unavailable : LocationResult
 }
 
+/** A geocoded address: a precise point plus the ZIP it falls in. */
+data class GeoResult(val lat: Double, val lon: Double, val zip: String, val name: String)
+
 /**
- * Turns the device's current position into a ZIP so a non-technical user can
- * add their area without knowing it. Android wires GPS + reverse geocoding;
- * iOS wiring lands with the iOS build. Null provider means "type a ZIP".
+ * Turns the device's current position or a typed address into coordinates so a
+ * non-technical user can add their area without knowing a ZIP. Android wires
+ * GPS + geocoding; iOS wiring lands with the iOS build.
  */
 interface LocationFinder {
     suspend fun currentZip(): LocationResult
+    suspend fun geocodeAddress(query: String): GeoResult?
 }
 
 object DeviceLocation {
@@ -23,4 +27,6 @@ object DeviceLocation {
 
     suspend fun currentZip(): LocationResult =
         finder?.currentZip() ?: LocationResult.Unavailable
+
+    suspend fun geocode(query: String): GeoResult? = finder?.geocodeAddress(query)
 }

@@ -17,8 +17,19 @@ data class SavedLocation(
     val lat: Double,
     val lon: Double,
     val radiusKm: Double,
+    val precise: Boolean = false, // true = an individual address, not a ZIP region
     val subscriptionId: String? = null,
-)
+) {
+    // Stable key; two precise addresses can share a ZIP, so include the point.
+    val id: String get() = if (precise) "$zip@$lat,$lon" else zip
+}
+
+/** Outcome of trying to add an area. */
+sealed interface AddOutcome {
+    data class Added(val location: SavedLocation) : AddOutcome
+    data class NotServed(val utility: String) : AddOutcome
+    data class Failed(val message: String) : AddOutcome
+}
 
 @Serializable
 data class AlertPrefs(
@@ -43,25 +54,51 @@ class LocationsRepository(
     private val _prefs = MutableStateFlow(loadPrefs())
     val prefs: StateFlow<AlertPrefs> = _prefs
 
-    suspend fun addZip(zip: String, label: String): Result<SavedLocation> {
+    /** Add a whole ZIP (a region). Pass force = true to add despite a non-PG&E warning. */
+    suspend fun addZip(zip: String, label: String, force: Boolean = false): AddOutcome {
         val info = api.zipInfo(zip)
-            ?: return Result.failure(IllegalArgumentException("Not a California ZIP we cover"))
-        var location = SavedLocation(
-            zip = info.zip,
-            label = label.ifBlank { "ZIP ${info.zip}" },
-            lat = info.lat,
-            lon = info.lon,
-            radiusKm = info.radiusKm,
+            ?: return AddOutcome.Failed("That isn't a California ZIP we cover.")
+        info.servedBy?.let { if (!force) return AddOutcome.NotServed(it) }
+        return commit(
+            SavedLocation(
+                zip = info.zip,
+                label = label.ifBlank { "ZIP ${info.zip}" },
+                lat = info.lat,
+                lon = info.lon,
+                radiusKm = info.radiusKm,
+                precise = false,
+            )
         )
-        location = location.copy(subscriptionId = subscribeFor(location))
-        _locations.value = _locations.value.filter { it.zip != location.zip } + location
+    }
+
+    /** Add a single address (a precise point). Geocoded to coordinates on-device. */
+    suspend fun addAddress(query: String, label: String, force: Boolean = false): AddOutcome {
+        val geo = DeviceLocation.geocode(query)
+            ?: return AddOutcome.Failed("Couldn't find that address. Try adding the city or ZIP.")
+        val info = api.zipInfo(geo.zip)
+        info?.servedBy?.let { if (!force) return AddOutcome.NotServed(it) }
+        return commit(
+            SavedLocation(
+                zip = geo.zip,
+                label = label.ifBlank { geo.name.substringBefore(",").take(40) },
+                lat = geo.lat,
+                lon = geo.lon,
+                radiusKm = 2.0, // address-level: polygon match handles precision
+                precise = true,
+            )
+        )
+    }
+
+    private suspend fun commit(base: SavedLocation): AddOutcome {
+        val location = base.copy(subscriptionId = subscribeFor(base))
+        _locations.value = _locations.value.filter { it.id != location.id } + location
         persist()
-        return Result.success(location)
+        return AddOutcome.Added(location)
     }
 
     suspend fun remove(location: SavedLocation) {
         location.subscriptionId?.let { runCatching { api.unsubscribe(it) } }
-        _locations.value = _locations.value - location
+        _locations.value = _locations.value.filter { it.id != location.id }
         persist()
     }
 
