@@ -63,8 +63,10 @@ class HomeViewModel : ViewModel() {
         }
         // Center the hero map on the first area affected, else the first area.
         val primary = statuses.firstOrNull { it.isOut }?.location ?: saved.first()
+        // Keep the hero local: the area plus a 10km ring, not the whole metro.
+        val mapRadius = primary.radiusKm + 10.0
         val mapOutages = runCatching {
-            api.outagesNear(primary.lat, primary.lon, radiusKm = 35.0, includeGeometry = true)
+            api.outagesNear(primary.lat, primary.lon, mapRadius, includeGeometry = true)
         }.getOrDefault(emptyList())
         _state.value = HomeState(
             loading = false,
