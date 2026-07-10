@@ -18,6 +18,11 @@ def test_unknown_code_expands_abbreviations():
     assert out == "Broken transformer equipment"
 
 
+def test_damaged_cable_code_fully_expands():
+    # Regression: "DAMGE" once leaked through as "Damge underground cable".
+    assert humanize_cause("DAMGE UG CABLE") == "Damaged underground cable"
+
+
 def test_whitespace_and_case_normalized():
     assert humanize_cause("  plnnd   shutdown ") == "Planned shutdown"
 
