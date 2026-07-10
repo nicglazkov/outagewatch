@@ -314,7 +314,7 @@ private fun SegTab(text: String, selected: Boolean, modifier: Modifier, onClick:
     Box(
         modifier.clip(RoundedCornerShape(8.dp))
             .background(if (selected) c.background else Color.Transparent)
-            .clickable { onClick() }.padding(vertical = 9.dp),
+            .clickable { onClick() }.padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(

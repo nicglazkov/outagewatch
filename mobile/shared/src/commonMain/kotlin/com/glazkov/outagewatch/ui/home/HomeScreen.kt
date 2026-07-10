@@ -105,18 +105,24 @@ fun HomeScreen(
                         )
                         Row(
                             Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)
-                                .padding(start = 18.dp, end = 16.dp, top = 6.dp),
+                                .padding(start = 18.dp, end = 6.dp, top = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 "OutageWatch", color = Color.White, fontSize = 26.sp,
                                 fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
                             )
-                            Icon(
-                                Icons.Default.Settings, contentDescription = "Settings",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp).clickable { onOpenSettings() },
-                            )
+                            // Padded hit area so the gear is an easy ~46dp target, not a 24dp icon.
+                            Box(
+                                Modifier.clip(RoundedCornerShape(22.dp))
+                                    .clickable { onOpenSettings() }.padding(11.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Default.Settings, contentDescription = "Settings",
+                                    tint = Color.White, modifier = Modifier.size(24.dp),
+                                )
+                            }
                         }
                     }
                 }

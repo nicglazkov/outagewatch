@@ -139,7 +139,7 @@ internal fun NavBar(title: String, onBack: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.clip(RoundedCornerShape(20.dp)).clickable { onBack() }.padding(8.dp),
+            Modifier.clip(RoundedCornerShape(22.dp)).clickable { onBack() }.padding(11.dp),
         ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.accent) }
         Text(title, color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
     }
