@@ -5,11 +5,15 @@ import com.glazkov.outagewatch.api.OutageApi
 import com.glazkov.outagewatch.api.SubscriptionRequest
 import com.glazkov.outagewatch.push.PushTokens
 import com.russhwolf.settings.Settings
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 
 @Serializable
 data class SavedLocation(
@@ -48,6 +52,9 @@ class LocationsRepository(
     private val settings: Settings = Settings(),
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    // Serializes every mutation so concurrent add/remove/resubscribe can't clobber
+    // each other (e.g. resubscribe resurrecting a just-removed area).
+    private val mutex = Mutex()
 
     private val _locations = MutableStateFlow(load())
     val locations: StateFlow<List<SavedLocation>> = _locations
@@ -57,13 +64,18 @@ class LocationsRepository(
 
     /** Add a whole ZIP (a region). Pass force = true to add despite a non-PG&E warning. */
     suspend fun addZip(zip: String, label: String, force: Boolean = false): AddOutcome {
-        val info = api.zipInfo(zip)
-            ?: return AddOutcome.Failed("That isn't a California ZIP we cover.")
+        val info = try {
+            api.zipInfo(zip)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return AddOutcome.Failed(NETWORK_ERROR)
+        } ?: return AddOutcome.Failed("That isn't a California ZIP we cover.")
         info.servedBy?.let { if (!force) return AddOutcome.NotServed(it) }
         return commit(
             SavedLocation(
                 zip = info.zip,
-                label = label.ifBlank { "ZIP ${info.zip}" },
+                label = cleanLabel(label, "ZIP ${info.zip}"),
                 lat = info.lat,
                 lon = info.lon,
                 radiusKm = info.radiusKm,
@@ -76,12 +88,14 @@ class LocationsRepository(
     suspend fun addAddress(query: String, label: String, force: Boolean = false): AddOutcome {
         val geo = DeviceLocation.geocode(query)
             ?: return AddOutcome.Failed("Couldn't find that address. Try adding the city or ZIP.")
-        val info = api.zipInfo(geo.zip)
+        // The address geocoded on-device, so the point is valid; the territory
+        // check is best-effort (skipped when the lookup can't reach the server).
+        val info = runCatching { api.zipInfo(geo.zip) }.getOrNull()
         info?.servedBy?.let { if (!force) return AddOutcome.NotServed(it) }
         return commit(
             SavedLocation(
                 zip = geo.zip,
-                label = label.ifBlank { geo.name.substringBefore(",").take(40) },
+                label = cleanLabel(label.ifBlank { geo.name.substringBefore(",") }, "ZIP ${geo.zip}"),
                 lat = geo.lat,
                 lon = geo.lon,
                 radiusKm = 2.0, // address-level: polygon match handles precision
@@ -103,7 +117,10 @@ class LocationsRepository(
         return commit(
             SavedLocation(
                 zip = suggestion.zip.orEmpty(),
-                label = label.ifBlank { suggestion.title },
+                label = cleanLabel(
+                    label.ifBlank { suggestion.title },
+                    suggestion.zip?.let { "ZIP $it" } ?: "Saved address",
+                ),
                 lat = suggestion.lat,
                 lon = suggestion.lon,
                 radiusKm = 2.0,
@@ -112,16 +129,33 @@ class LocationsRepository(
         )
     }
 
-    private suspend fun commit(base: SavedLocation): AddOutcome {
+    private suspend fun commit(base: SavedLocation): AddOutcome = mutex.withLock {
+        // Re-adding the same area must release its old subscription first, or the
+        // backend keeps both and the user gets duplicate notifications.
+        _locations.value.firstOrNull { it.id == base.id }?.subscriptionId
+            ?.let { runCatching { api.unsubscribe(it) } }
         val location = base.copy(subscriptionId = subscribeFor(base))
         _locations.value = _locations.value.filter { it.id != location.id } + location
         persist()
-        return AddOutcome.Added(location)
+        AddOutcome.Added(location)
     }
 
-    suspend fun remove(location: SavedLocation) {
-        location.subscriptionId?.let { runCatching { api.unsubscribe(it) } }
+    suspend fun remove(location: SavedLocation) = mutex.withLock {
+        _locations.value.firstOrNull { it.id == location.id }?.subscriptionId
+            ?.let { runCatching { api.unsubscribe(it) } }
         _locations.value = _locations.value.filter { it.id != location.id }
+        persist()
+    }
+
+    /**
+     * Re-attempt any subscription that failed earlier (added offline, or before a
+     * push token existed). Called on app start so alerts self-heal.
+     */
+    suspend fun retryMissingSubscriptions() = mutex.withLock {
+        if (_locations.value.none { it.subscriptionId == null }) return@withLock
+        _locations.value = _locations.value.map { loc ->
+            if (loc.subscriptionId != null) loc else loc.copy(subscriptionId = subscribeFor(loc))
+        }
         persist()
     }
 
@@ -153,12 +187,18 @@ class LocationsRepository(
         }.getOrNull()
     }
 
-    private suspend fun resubscribeAll() {
+    private suspend fun resubscribeAll() = mutex.withLock {
         _locations.value = _locations.value.map { location ->
             location.subscriptionId?.let { runCatching { api.unsubscribe(it) } }
             location.copy(subscriptionId = subscribeFor(location))
         }
         persist()
+    }
+
+    /** A label is never blank or a bare number (e.g. a stray geocoder house number). */
+    private fun cleanLabel(raw: String, fallback: String): String {
+        val trimmed = raw.trim().take(40)
+        return if (trimmed.isEmpty() || trimmed.all { it.isDigit() }) fallback else trimmed
     }
 
     private fun persist() {
@@ -170,9 +210,15 @@ class LocationsRepository(
 
     private fun load(): List<SavedLocation> {
         val raw = settings.getStringOrNull(LOCATIONS_KEY) ?: return emptyList()
-        return runCatching {
+        runCatching {
             json.decodeFromString(ListSerializer(SavedLocation.serializer()), raw)
-        }.getOrDefault(emptyList())
+        }.onSuccess { return it }
+        // Salvage element by element so one bad/edited entry can't wipe them all.
+        val array = runCatching { json.parseToJsonElement(raw).jsonArray }.getOrNull()
+            ?: return emptyList()
+        return array.mapNotNull { el ->
+            runCatching { json.decodeFromJsonElement(SavedLocation.serializer(), el) }.getOrNull()
+        }
     }
 
     private fun loadPrefs(): AlertPrefs {
@@ -185,6 +231,8 @@ class LocationsRepository(
     companion object {
         private const val LOCATIONS_KEY = "saved_locations"
         private const val PREFS_KEY = "alert_prefs"
+        private const val NETWORK_ERROR =
+            "Couldn't reach OutageWatch. Check your connection and try again."
     }
 }
 

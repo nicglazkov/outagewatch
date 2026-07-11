@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.glazkov.outagewatch.api.Outage
 import com.glazkov.outagewatch.data.SavedLocation
 import com.glazkov.outagewatch.ui.AppGraph
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -25,12 +28,14 @@ data class LocationStatus(
 
 data class HomeState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val locations: List<LocationStatus> = emptyList(),
     // Map hero: primary area's center + nearby outages (with geometry).
     val mapCenter: SavedLocation? = null,
     val mapOutages: List<Outage> = emptyList(),
 ) {
     val affectedCount: Int get() = locations.count { it.isOut }
+    val errorCount: Int get() = locations.count { it.error }
 }
 
 class HomeViewModel : ViewModel() {
@@ -39,11 +44,18 @@ class HomeViewModel : ViewModel() {
 
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state
+    private var saved: List<SavedLocation> = emptyList()
 
     init {
         viewModelScope.launch {
-            repo.locations.collect { saved -> refresh(saved) }
+            repo.locations.collect { list -> saved = list; refresh(list) }
         }
+    }
+
+    /** User-triggered retry (e.g. after a "can't reach PG&E" error). */
+    fun refresh() {
+        _state.value = _state.value.copy(refreshing = true)
+        viewModelScope.launch { refresh(saved) }
     }
 
     private suspend fun refresh(saved: List<SavedLocation>) {
@@ -51,15 +63,21 @@ class HomeViewModel : ViewModel() {
             _state.value = HomeState(loading = false)
             return
         }
-        val statuses = saved.map { location ->
-            runCatching {
-                // Coordinates work for both ZIP regions (centroid) and precise
-                // addresses (exact point), so one path serves both.
-                LocationStatus(
-                    location,
-                    api.outagesNear(location.lat, location.lon, location.radiusKm),
-                )
-            }.getOrElse { LocationStatus(location, error = true) }
+        // Fetch every area concurrently so one slow/failed call doesn't stack up
+        // (offline degrades in one timeout, not N of them, one after another).
+        val statuses = coroutineScope {
+            saved.map { location ->
+                async {
+                    runCatching {
+                        // Coordinates work for both ZIP regions (centroid) and
+                        // precise addresses (exact point), so one path serves both.
+                        LocationStatus(
+                            location,
+                            api.outagesNear(location.lat, location.lon, location.radiusKm),
+                        )
+                    }.getOrElse { LocationStatus(location, error = true) }
+                }
+            }.awaitAll()
         }
         // Center the hero map on the first area affected, else the first area.
         val primary = statuses.firstOrNull { it.isOut }?.location ?: saved.first()

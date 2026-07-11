@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 data class DetailState(
     val loading: Boolean = true,
     val notFound: Boolean = false,
+    val error: Boolean = false,
     val detail: OutageDetail? = null,
     val etaChanges: Int = 0,
     val explanation: String? = null,
@@ -27,8 +28,19 @@ class DetailViewModel(private val outageId: String) : ViewModel() {
         viewModelScope.launch { load() }
     }
 
+    fun reload() {
+        _state.value = DetailState(loading = true)
+        viewModelScope.launch { load() }
+    }
+
     private suspend fun load() {
-        val detail = runCatching { api.outageDetail(outageId) }.getOrNull()
+        val result = runCatching { api.outageDetail(outageId) }
+        if (result.isFailure) {
+            // Couldn't reach the server: an error, not a confirmed restoration.
+            _state.value = DetailState(loading = false, error = true)
+            return
+        }
+        val detail = result.getOrNull()
         if (detail == null) {
             _state.value = DetailState(loading = false, notFound = true)
             return

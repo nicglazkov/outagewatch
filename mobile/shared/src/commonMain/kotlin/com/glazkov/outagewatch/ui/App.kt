@@ -5,7 +5,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.glazkov.outagewatch.ui.theme.CompassTheme
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -24,6 +28,15 @@ import kotlinx.serialization.Serializable
 object AppGraph {
     val api: OutageApi by lazy { OutageApi() }
     val locations: LocationsRepository by lazy { LocationsRepository(api) }
+}
+
+/**
+ * An outage id a notification tap wants to open. The platform layer (Android
+ * MainActivity) writes it from the launch/new intent; [App] observes it and
+ * navigates, so tapping a push actually opens the outage.
+ */
+object PendingOutage {
+    val id = MutableStateFlow<String?>(null)
 }
 
 @Serializable object HomeRoute
@@ -51,6 +64,13 @@ fun App() {
     CompassTheme {
     MaterialTheme(colorScheme = colors) {
         val nav = rememberNavController()
+        // A notification tap sets PendingOutage.id; open that outage, then clear it.
+        val pendingOutage by PendingOutage.id.collectAsState()
+        LaunchedEffect(pendingOutage) {
+            val id = pendingOutage ?: return@LaunchedEffect
+            PendingOutage.id.value = null
+            nav.navigate(DetailRoute(id))
+        }
         NavHost(navController = nav, startDestination = HomeRoute) {
             composable<HomeRoute> {
                 HomeScreen(
