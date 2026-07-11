@@ -12,11 +12,13 @@ Quiet hours are respected for everything except PSPS warnings.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import UTC, datetime, time
+from zoneinfo import ZoneInfo
 
 from watcher.differ import Change, ChangeType
 
 MATERIAL_ETA_SHIFT_MINUTES = 30.0
+_PACIFIC = ZoneInfo("America/Los_Angeles")
 
 
 @dataclass(frozen=True)
@@ -96,10 +98,15 @@ def should_send(
     return not in_quiet_hours(now_local, quiet_start, quiet_end)
 
 
-def _eta_phrase(eta: datetime | None) -> str:
+def _eta_phrase(eta: datetime | None, now: datetime | None = None) -> str:
     if eta is None:
         return "No restoration estimate yet"
-    return f"Estimated restoration {eta.strftime('%b %d %I:%M %p').replace(' 0', ' ')} UTC"
+    now = now or datetime.now(UTC)
+    if eta < now:
+        return "PG&E's estimate has passed and has not been updated"
+    # All PG&E territory is Pacific; a raw UTC time reads 7-8 hours off.
+    local = eta.astimezone(_PACIFIC)
+    return f"Estimated restoration {local.strftime('%b %d %I:%M %p').replace(' 0', ' ')}"
 
 
 def _friendly_cause(raw: str | None) -> str | None:

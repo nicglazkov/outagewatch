@@ -24,6 +24,26 @@ def test_damaged_cable_code_fully_expands():
     assert humanize_cause("DAMGE UG CABLE") == "Damaged underground cable"
 
 
+def test_more_feed_cause_codes():
+    assert humanize_cause("PATROLLING") == "Crews are locating the problem"
+    assert humanize_cause("REPAIR WIRE DWN") == "Crew repairing a downed wire"
+    assert humanize_cause("AWAITING INVESTIGATION") == "Cause under investigation"
+    # Hyphen/slash separators are normalized before matching.
+    assert humanize_cause("DIG-IN") == "Someone dug into an underground line"
+
+
+def test_southern_california_flagged_non_pge():
+    assert non_pge_utility("90210") == "Southern California Edison or LADWP"
+    assert non_pge_utility("92101") == "San Diego Gas & Electric"  # San Diego
+    assert non_pge_utility("92602") == "Southern California Edison"  # Irvine
+
+
+def test_pge_central_valley_still_covered():
+    # Bakersfield and San Luis Obispo are PG&E; must not be flagged as SoCal.
+    assert non_pge_utility("93301") is None
+    assert non_pge_utility("93401") is None
+
+
 def test_whitespace_and_case_normalized():
     assert humanize_cause("  plnnd   shutdown ") == "Planned shutdown"
 

@@ -73,6 +73,14 @@ def test_out_of_state_dropped():
     )
 
 
+def test_census_far_from_california_rejected():
+    # A mid-Nevada point with a non-CA postcode is >12km from any CA ZIP -> dropped.
+    s = census_to_suggestion(
+        _census_match("1 DESERT RD, AUSTIN, NV, 89310", 39.5, -117.0)
+    )
+    assert s is None
+
+
 def test_missing_postcode_snaps_to_nearest_ca_zip():
     area = zipcodes.lookup("95404")
     s = to_suggestion(

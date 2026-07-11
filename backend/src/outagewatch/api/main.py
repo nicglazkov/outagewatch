@@ -8,6 +8,7 @@ Two Cloud Run services run this same app:
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from datetime import datetime
@@ -17,7 +18,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from outagewatch import zipcodes
 from outagewatch.causes import humanize_cause
@@ -26,6 +27,8 @@ from outagewatch.store import StoredSubscription
 from watcher.matcher import Subscription as MatcherSub
 from watcher.matcher import item_matches
 from watcher.types import Item
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="OutageWatch API",
@@ -81,10 +84,20 @@ class SubscriptionIn(BaseModel):
     tz: str = "America/Los_Angeles"
     psps_warnings: bool = True
 
+    @field_validator("tz")
+    @classmethod
+    def _known_tz(cls, value: str) -> str:
+        # A bad tz would later crash the poller for everyone; coerce unknowns.
+        from zoneinfo import available_timezones
+
+        return value if value in available_timezones() else "America/Los_Angeles"
+
     @model_validator(mode="after")
     def _location_required(self):
-        has_point = self.lat is not None and self.lon is not None
-        if not has_point and not self.zip_code:
+        has_lat, has_lon = self.lat is not None, self.lon is not None
+        if has_lat != has_lon:
+            raise ValueError("lat and lon must be provided together")
+        if not (has_lat and has_lon) and not self.zip_code:
             raise ValueError("provide zip_code or lat+lon")
         return self
 
@@ -203,15 +216,24 @@ async def get_outage(outage_id: str, deps: Deps = Depends(get_deps)) -> dict[str
 async def explain_outage_endpoint(
     outage_id: str, deps: Deps = Depends(get_deps)
 ) -> dict[str, str]:
-    from outagewatch.explain import explain_outage
+    import asyncio
+
+    from outagewatch.explain import explain_outage, fallback_explanation
 
     snapshot = await deps.state.load() or {}
     item = snapshot.get(outage_id)
     if item is None:
         raise HTTPException(status_code=404, detail="outage not found or restored")
-    text = explain_outage(
-        item, deps.llm, deps.explain_cache, deps.eta_history.get(outage_id)
-    )
+    history = deps.eta_history.get(outage_id)
+    try:
+        # The LLM SDK call is blocking; run it off the event loop, and never let
+        # an LLM error 500 the endpoint. Fall back to a plain factual summary.
+        text = await asyncio.to_thread(
+            explain_outage, item, deps.llm, deps.explain_cache, history
+        )
+    except Exception:
+        logger.exception("explain failed for %s, using fallback", outage_id)
+        text = fallback_explanation(item, history)
     return {"outage_id": outage_id, "explanation": text}
 
 

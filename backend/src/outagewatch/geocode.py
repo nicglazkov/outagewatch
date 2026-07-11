@@ -172,8 +172,12 @@ def census_to_suggestion(match: dict) -> Suggestion | None:
     city = parts[1].title() if len(parts) > 1 else ""
     zip_code = parts[-1][:5] if parts and parts[-1][:5].isdigit() else None
     if zip_code is None or zipcodes.lookup(zip_code) is None:
-        area, _km = zipcodes.nearest(lat, lon)
-        zip_code = area.zip_code if area is not None else zip_code
+        area, km = zipcodes.nearest(lat, lon)
+        # Reject a hit that snaps too far from any CA ZIP: it's out of coverage
+        # (e.g. a Reno/Tahoe-border address that Census matched via ", CA").
+        if area is None or km > _MAX_SNAP_KM:
+            return None
+        zip_code = area.zip_code
     utility = non_pge_utility(zip_code) if zip_code else None
     subtitle = ", ".join(p for p in (city, "California", zip_code) if p)
     return Suggestion(

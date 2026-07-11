@@ -40,6 +40,21 @@ _PHRASES = {
     "FAST TRIP": "A fast-trip safety shutoff",
     "UNKNOWN": "Cause under investigation",
     "UNDER INVESTIGATION": "Cause under investigation",
+    "AWAITING INVESTIGATION": "Cause under investigation",
+    "PATROLLING": "Crews are locating the problem",
+    "REPAIR WIRE DWN": "Crew repairing a downed wire",
+    "BLOWN FUSE": "A blown fuse",
+    "FUSE": "A blown fuse",
+    "DIG IN": "Someone dug into an underground line",
+    "CROSSARM": "A broken crossarm",
+    "BROKEN CROSSARM": "A broken crossarm",
+    "MYLAR BALLOON": "A metallic balloon hit a line",
+    "BALLOON": "A metallic balloon hit a line",
+    "LIGHTNING": "Lightning",
+    "ANIMAL CONTACT": "An animal touched a line",
+    "PLANNED": "Planned work",
+    "EQUIP FAILURE": "Equipment failure",
+    "EQPT FAIL": "Equipment failure",
     "PSPS": "A Public Safety Power Shutoff (PSPS)",
 }
 
@@ -72,10 +87,25 @@ _WORDS = {
     "MAINT": "maintenance",
     "TRANS": "transformer",
     "XFMR": "transformer",
+    "XFRMR": "transformer",
+    "TFMR": "transformer",
+    "TRANSF": "transformer",
     "DISTR": "distribution",
     "CUST": "customer",
     "VEG": "vegetation",
     "WX": "weather",
+    "DWN": "down",
+    "SWTCH": "switch",
+    "SUBSTN": "substation",
+    "INSLTR": "insulator",
+    "WND": "wind",
+    "OPTD": "operated",
+    "OPRTD": "operated",
+    "FLR": "failure",
+    "OVRLD": "overload",
+    "LGHTNG": "lightning",
+    "CRSSARM": "crossarm",
+    "VEH": "vehicle",
 }
 
 
@@ -83,7 +113,8 @@ def humanize_cause(raw: str | None) -> str | None:
     """Plain-English cause, or None if the feed gave us nothing."""
     if not raw:
         return None
-    key = " ".join(raw.upper().split())
+    # Normalize separators so "DIG-IN" and "CAR/POLE" tokenize like spaced text.
+    key = " ".join(raw.upper().replace("-", " ").replace("/", " ").split())
     if key in _PHRASES:
         return _PHRASES[key]
     words = [_WORDS.get(tok, tok.lower()) for tok in key.split()]

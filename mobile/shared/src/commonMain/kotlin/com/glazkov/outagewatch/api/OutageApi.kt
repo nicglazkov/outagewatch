@@ -2,6 +2,7 @@ package com.glazkov.outagewatch.api
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -79,6 +80,13 @@ class OutageApi(private val client: HttpClient = defaultClient()) {
     companion object {
         fun defaultClient(): HttpClient = HttpClient {
             expectSuccess = false
+            // No call may hang forever: a dead/slow network fails fast so the UI
+            // can show an error instead of an endless spinner.
+            install(HttpTimeout) {
+                requestTimeoutMillis = 12_000
+                connectTimeoutMillis = 8_000
+                socketTimeoutMillis = 12_000
+            }
             install(ContentNegotiation) {
                 json(Json {
                     ignoreUnknownKeys = true
