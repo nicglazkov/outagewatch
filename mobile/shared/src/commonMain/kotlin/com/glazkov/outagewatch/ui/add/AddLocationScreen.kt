@@ -71,6 +71,9 @@ fun AddLocationScreen(onDone: () -> Unit) {
     var searching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
+    // The add that produced the current warning, so "Add anyway" re-runs the right
+    // one (GPS, ZIP, or address) with force = true instead of re-reading the form.
+    var pendingAction by remember { mutableStateOf<(suspend (Boolean) -> AddOutcome)?>(null) }
     // Bias suggestions toward the user's first saved area, if they have one.
     val bias = remember { AppGraph.locations.locations.value.firstOrNull() }
 
@@ -90,33 +93,40 @@ fun AddLocationScreen(onDone: () -> Unit) {
         searching = false
     }
 
-    fun handle(outcome: AddOutcome) {
-        busy = false
-        when (outcome) {
-            is AddOutcome.Added -> onDone()
-            is AddOutcome.NotServed -> {
-                warnUtility = outcome.utility
-                error = "This area is served by ${outcome.utility}, not PG&E. " +
-                    "OutageWatch won't show outages here."
-            }
-            is AddOutcome.Failed -> error = outcome.message
-        }
-    }
-
-    fun submit(force: Boolean) {
+    fun runAdd(action: suspend (Boolean) -> AddOutcome, force: Boolean) {
         // Dismiss the keyboard before we navigate away on success; disposing a
         // focused text field mid-navigation with the IME open can wedge the UI.
         focus.clearFocus()
         busy = true
         error = null
         scope.launch {
-            val outcome = when (mode) {
-                Mode.Address -> picked?.let { AppGraph.locations.addSuggestion(it, label, force) }
-                    ?: AppGraph.locations.addAddress(address, label, force)
-                Mode.Zip -> AppGraph.locations.addZip(zip, label, force)
+            val outcome = action(force)
+            busy = false
+            when (outcome) {
+                is AddOutcome.Added -> onDone()
+                is AddOutcome.NotServed -> {
+                    pendingAction = action
+                    warnUtility = outcome.utility
+                    error = "This area is served by ${outcome.utility}, not PG&E. " +
+                        "OutageWatch won't show outages here."
+                }
+                is AddOutcome.Failed -> error = outcome.message
             }
-            handle(outcome)
         }
+    }
+
+    fun currentAction(): suspend (Boolean) -> AddOutcome = when (mode) {
+        Mode.Address -> { force ->
+            picked?.let { AppGraph.locations.addSuggestion(it, label, force) }
+                ?: AppGraph.locations.addAddress(address, label, force)
+        }
+        Mode.Zip -> { force -> AppGraph.locations.addZip(zip, label, force) }
+    }
+
+    fun submit() {
+        // "Add anyway" after a non-PG&E warning re-runs whatever produced it.
+        val warned = warnUtility != null && pendingAction != null
+        runAdd(if (warned) pendingAction!! else currentAction(), force = warned)
     }
 
     fun choose(s: AddressSuggestion) {
@@ -132,16 +142,16 @@ fun AddLocationScreen(onDone: () -> Unit) {
         NavBar("Add an area", onDone)
         Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
             if (DeviceLocation.available) {
-                LocationButton(locating || busy) {
+                LocationButton(locating) {
                     locating = true
                     error = null
                     warnUtility = null
+                    pendingAction = null
                     scope.launch {
                         when (val r = DeviceLocation.currentZip()) {
                             is LocationResult.Found -> {
                                 locating = false
-                                busy = true
-                                handle(AppGraph.locations.addZip(r.zip, "Home"))
+                                runAdd({ f -> AppGraph.locations.addZip(r.zip, "Home", f) }, force = false)
                             }
                             LocationResult.PermissionDenied -> {
                                 locating = false
@@ -224,11 +234,13 @@ fun AddLocationScreen(onDone: () -> Unit) {
             )
             Spacer(Modifier.height(18.dp))
             val ready = if (mode == Mode.Address) address.isNotBlank() else zip.length == 5
-            val enabled = ready && !busy && !locating
+            // "Add anyway" stays tappable even when the field is empty (e.g. the
+            // warning came from "Use my current location").
+            val enabled = (ready || warnUtility != null) && !busy && !locating
             Box(
                 Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp))
                     .background(if (enabled) (if (warnUtility != null) c.outage else c.accent) else c.separator)
-                    .clickable(enabled = enabled) { submit(force = warnUtility != null) },
+                    .clickable(enabled = enabled) { submit() },
                 contentAlignment = Alignment.Center,
             ) {
                 if (busy && !locating) {

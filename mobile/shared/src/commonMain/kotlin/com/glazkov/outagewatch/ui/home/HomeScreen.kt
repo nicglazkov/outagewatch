@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.glazkov.outagewatch.data.SavedLocation
 import com.glazkov.outagewatch.ui.AppGraph
-import com.glazkov.outagewatch.ui.formatEta
+import com.glazkov.outagewatch.ui.etaBack
 import com.glazkov.outagewatch.ui.map.OutageMapView
 import com.glazkov.outagewatch.ui.theme.Cell
 import com.glazkov.outagewatch.ui.theme.GroupedFootnote
@@ -135,7 +135,12 @@ fun HomeScreen(
                         .verticalScroll(rememberScrollState()),
                 ) {
                     Spacer(Modifier.height(6.dp))
-                    SummaryCell(state.affectedCount, state.locations.size)
+                    SummaryCell(
+                        affected = state.affectedCount,
+                        errored = state.errorCount,
+                        total = state.locations.size,
+                        onRetry = { viewModel.refresh() },
+                    )
                     Row(
                         Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 6.dp),
                     ) {
@@ -182,20 +187,34 @@ fun HomeScreen(
 }
 
 @Composable
-private fun SummaryCell(affected: Int, total: Int) {
+private fun SummaryCell(affected: Int, errored: Int, total: Int, onRetry: () -> Unit) {
     val c = LocalCompass.current
-    val (emoji, tint, text) = if (affected > 0) {
-        Triple("⚡", c.outageTint, "$affected of $total ${plural(total, "area")} affected")
-    } else {
-        Triple("✓", c.clearTint, "All $total ${plural(total, "area")} clear")
+    // Never claim "all clear" when we actually could not reach the feed.
+    val (emoji, tint, text, retry) = when {
+        affected > 0 ->
+            Quad("⚡", c.outageTint, "$affected of $total ${plural(total, "area")} affected", false)
+        errored >= total ->
+            Quad("⚠️", c.outageTint, "Can't reach PG&E right now. Tap to retry.", true)
+        errored > 0 ->
+            Quad("⚠️", c.outageTint, "Couldn't check $errored of $total. Tap to retry.", true)
+        else ->
+            Quad("✓", c.clearTint, "All $total ${plural(total, "area")} clear", false)
     }
     Column(
         Modifier.padding(horizontal = 16.dp).fillMaxWidth()
             .clip(RoundedCornerShape(14.dp)).background(c.card),
     ) {
-        Cell(title = text, leadingEmoji = emoji, leadingTint = tint, showSeparator = false)
+        Cell(
+            title = text,
+            leadingEmoji = emoji,
+            leadingTint = tint,
+            showSeparator = false,
+            onClick = if (retry) onRetry else null,
+        )
     }
 }
+
+private data class Quad(val a: String, val b: Color, val c: String, val d: Boolean)
 
 @Composable
 private fun RemovableAreaCell(
@@ -231,20 +250,26 @@ private fun AreaCell(status: LocationStatus, last: Boolean, onOpenZip: (SavedLoc
     val c = LocalCompass.current
     val outage = status.worstOutage
     val subtitle = when {
-        status.error -> "Couldn't reach the feed"
+        status.error -> "Couldn't check this area right now"
         outage == null -> "No outages"
         else -> listOfNotNull(
-            outage.cause?.lowercase()?.replaceFirstChar { it.uppercase() },
-            outage.eta?.let {
-                "back " + formatEta(it).removePrefix("Estimated restoration: ").lowercase()
-            },
+            outage.cause,
+            etaBack(outage.eta),
         ).joinToString(" · ").ifEmpty { "Outage reported" }
     }
     Cell(
         title = status.location.label,
         subtitle = subtitle,
-        leadingEmoji = if (status.isOut) "⚡" else "✓",
-        leadingTint = if (status.isOut) c.outageTint else c.clearTint,
+        leadingEmoji = when {
+            status.error -> "?"
+            status.isOut -> "⚡"
+            else -> "✓"
+        },
+        leadingTint = when {
+            status.error -> c.separator
+            status.isOut -> c.outageTint
+            else -> c.clearTint
+        },
         trailing = when {
             status.error -> "?"
             status.isOut -> if (outage?.isPsps == true) "PSPS" else "Out"

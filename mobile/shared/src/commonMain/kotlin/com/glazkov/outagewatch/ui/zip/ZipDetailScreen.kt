@@ -1,6 +1,7 @@
 package com.glazkov.outagewatch.ui.zip
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
@@ -24,13 +26,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.glazkov.outagewatch.ui.customersLine
 import com.glazkov.outagewatch.ui.detail.NavBar
-import com.glazkov.outagewatch.ui.formatEta
+import com.glazkov.outagewatch.ui.etaBack
 import com.glazkov.outagewatch.ui.map.OutageMapView
 import com.glazkov.outagewatch.ui.theme.Cell
 import com.glazkov.outagewatch.ui.theme.GroupedSection
@@ -77,40 +82,57 @@ fun ZipDetailScreen(
             )
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Text(
-                summaryLine(state), color = c.label, fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 2.dp),
-            )
-            if (state.areaOutages.isEmpty()) {
+            if (state.error) {
                 Text(
-                    "Nothing reported within ${state.contextRadiusKm.roundToInt()} km. You'll " +
-                        "get a push the moment that changes.",
-                    color = c.secondary, fontSize = 14.sp, modifier = Modifier.padding(20.dp, 8.dp),
+                    "Couldn't load outages right now. Check your connection.",
+                    color = c.label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(20.dp, 16.dp, 20.dp, 8.dp),
                 )
+                Box(
+                    Modifier.padding(horizontal = 20.dp).clip(RoundedCornerShape(12.dp))
+                        .background(c.accent).clickable { viewModel.reload() }
+                        .padding(horizontal = 22.dp, vertical = 12.dp),
+                ) {
+                    Text("Try again", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
             } else {
-                SectionHeader("Outages")
-                GroupedSection {
-                    state.areaOutages.forEachIndexed { i, entry ->
-                        val o = entry.outage
-                        Cell(
-                            title = if (o.isPsps) "PSPS shutoff" else "Power outage",
-                            subtitle = listOfNotNull(
-                                o.cause, o.city, o.estCustomers?.let { "$it customers" },
-                                formatEta(o.eta).removePrefix("Estimated restoration: ")
-                                    .let { if (it.startsWith("No")) null else "back $it" },
-                            ).joinToString(" · ").ifEmpty { "Details pending" },
-                            leadingEmoji = if (o.isPsps) "⚠️" else "⚡",
-                            leadingTint = c.outageTint,
-                            trailing = if (entry.inZip) "here" else "${entry.distanceKm.roundToInt()} km",
-                            trailingColor = if (entry.inZip) c.outage else c.secondary,
-                            chevron = true,
-                            showSeparator = i != state.areaOutages.lastIndex,
-                            onClick = {
-                                focusNonce[0]++
-                                focusToken = "${o.id}#${focusNonce[0]}"
-                            },
-                        )
+                Text(
+                    summaryLine(state), color = c.label, fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 2.dp),
+                )
+                if (state.areaOutages.isEmpty()) {
+                    Text(
+                        "Nothing reported within ${state.contextRadiusKm.roundToInt()} km. You'll " +
+                            "get a push the moment that changes.",
+                        color = c.secondary, fontSize = 14.sp, modifier = Modifier.padding(20.dp, 8.dp),
+                    )
+                } else {
+                    SectionHeader("Outages")
+                    GroupedSection {
+                        state.areaOutages.forEachIndexed { i, entry ->
+                            val o = entry.outage
+                            Cell(
+                                title = if (o.isPsps) "PSPS shutoff" else "Power outage",
+                                subtitle = listOfNotNull(
+                                    o.cause, o.city, customersLine(o.estCustomers), etaBack(o.eta),
+                                ).joinToString(" · ").ifEmpty { "Details pending" },
+                                leadingEmoji = if (o.isPsps) "⚠️" else "⚡",
+                                leadingTint = c.outageTint,
+                                trailing = when {
+                                    entry.inZip -> "here"
+                                    entry.distanceKm != null -> "${entry.distanceKm.roundToInt()} km"
+                                    else -> "nearby"
+                                },
+                                trailingColor = if (entry.inZip) c.outage else c.secondary,
+                                chevron = true,
+                                showSeparator = i != state.areaOutages.lastIndex,
+                                onClick = {
+                                    focusNonce[0]++
+                                    focusToken = "${o.id}#${focusNonce[0]}"
+                                },
+                            )
+                        }
                     }
                 }
             }

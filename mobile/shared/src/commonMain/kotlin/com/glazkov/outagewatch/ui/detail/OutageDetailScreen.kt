@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,6 +38,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.Text
 import com.glazkov.outagewatch.ui.formatEta
 import com.glazkov.outagewatch.ui.formatIso
+import com.glazkov.outagewatch.ui.groupedNumber
 import com.glazkov.outagewatch.ui.theme.Cell
 import com.glazkov.outagewatch.ui.theme.GroupedFootnote
 import com.glazkov.outagewatch.ui.theme.GroupedSection
@@ -65,6 +67,21 @@ fun OutageDetailScreen(
                 color = c.secondary, fontSize = 15.sp, modifier = Modifier.padding(20.dp),
             )
 
+            state.error -> Column(Modifier.padding(20.dp)) {
+                Text(
+                    "Couldn't load this outage right now. Check your connection.",
+                    color = c.label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(12.dp))
+                Box(
+                    Modifier.clip(RoundedCornerShape(12.dp)).background(c.accent)
+                        .clickable { viewModel.reload() }
+                        .padding(horizontal = 22.dp, vertical = 12.dp),
+                ) {
+                    Text("Try again", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
             else -> {
                 val outage = state.detail?.outage ?: return
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -91,12 +108,18 @@ fun OutageDetailScreen(
                         val facts = buildList {
                             outage.cause?.let { add("Cause" to it) }
                             outage.crewStatus?.let { add("Crew status" to it) }
-                            outage.estCustomers?.let { add("Customers affected" to it.toString()) }
+                            outage.estCustomers?.let { add("Customers affected" to groupedNumber(it)) }
                             outage.city?.let { add("City" to it) }
                             outage.startedAt?.let { add("Started" to formatIso(it)) }
                         }
                         facts.forEachIndexed { i, (k, v) ->
-                            Cell(title = k, trailing = v, showSeparator = i != facts.lastIndex)
+                            // Long values (e.g. a wordy cause) read better as a
+                            // full-width subtitle than as cramped right-aligned text.
+                            if (v.length > 22) {
+                                Cell(title = k, subtitle = v, showSeparator = i != facts.lastIndex)
+                            } else {
+                                Cell(title = k, trailing = v, showSeparator = i != facts.lastIndex)
+                            }
                         }
                     }
 

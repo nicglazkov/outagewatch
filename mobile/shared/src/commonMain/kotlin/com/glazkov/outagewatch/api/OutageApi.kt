@@ -38,8 +38,15 @@ class OutageApi(private val client: HttpClient = defaultClient()) {
     suspend fun outagesForZip(zip: String): List<Outage> =
         client.get("${ApiConfig.baseUrl}/v1/outages") { parameter("zip", zip) }.body()
 
-    suspend fun outageDetail(id: String): OutageDetail =
-        client.get("${ApiConfig.baseUrl}/v1/outages/$id").body()
+    /** Null means the outage is gone (404, likely restored); throws on network/server error. */
+    suspend fun outageDetail(id: String): OutageDetail? {
+        val response = client.get("${ApiConfig.baseUrl}/v1/outages/$id")
+        return when (response.status) {
+            HttpStatusCode.OK -> response.body()
+            HttpStatusCode.NotFound -> null
+            else -> throw IllegalStateException("outage detail failed: ${response.status}")
+        }
+    }
 
     suspend fun explain(id: String): Explanation =
         client.get("${ApiConfig.baseUrl}/v1/outages/$id/explain").body()
