@@ -122,7 +122,7 @@ async def poll_once(
                 continue
             if not sub.psps_warnings and alert.kind == "psps_warning":
                 continue
-            local = now.astimezone(ZoneInfo(sub.tz))
+            local = now.astimezone(_zone(sub.tz))
             if not should_send(alert, local, _t(sub.quiet_start), _t(sub.quiet_end)):
                 continue
             messages.append(
@@ -156,6 +156,20 @@ def _alert_data(alert, payload: dict[str, Any]) -> dict[str, str]:
         "cause": str(payload.get("OUTAGE_CAUSE") or ""),
         "customers": str(payload.get("EST_CUSTOMERS") or ""),
     }
+
+
+_DEFAULT_ZONE = ZoneInfo("America/Los_Angeles")
+
+
+def _zone(name: str | None) -> ZoneInfo:
+    """Never let one subscription's bad tz crash the whole poll cycle."""
+    if not name:
+        return _DEFAULT_ZONE
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        logger.warning("unknown tz %r, using Pacific", name)
+        return _DEFAULT_ZONE
 
 
 def _t(value: str | None) -> time | None:

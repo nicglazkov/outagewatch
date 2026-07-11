@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, time
 
-from outagewatch.rules import Alert, alert_for_change, in_quiet_hours, should_send
+from outagewatch.rules import Alert, _eta_phrase, alert_for_change, in_quiet_hours, should_send
 from watcher.differ import Change, ChangeType
 from watcher.types import Item
 
@@ -68,6 +68,19 @@ def test_updated_never_notifies():
 
 def test_restored_notifies():
     assert alert_for_change(Change(ChangeType.RESTORED, _item(), _item())).kind == "restored"
+
+
+def test_eta_phrase_is_pacific_not_utc():
+    now = datetime(2026, 7, 9, 12, 0, tzinfo=UTC)
+    # 23:00 UTC is 4:00 PM Pacific (PDT), and there is no "UTC" label.
+    assert _eta_phrase(_dt(23, 0), now) == "Estimated restoration Jul 9 4:00 PM"
+
+
+def test_eta_phrase_flags_past_estimate():
+    now = datetime(2026, 7, 9, 20, 0, tzinfo=UTC)
+    phrase = _eta_phrase(_dt(18, 0), now)  # 18:00 is before now
+    assert "passed" in phrase
+    assert "PM" not in phrase  # no stale future-looking timestamp
 
 
 def test_quiet_hours_same_day_window():

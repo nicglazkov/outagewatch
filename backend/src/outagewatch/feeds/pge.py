@@ -175,6 +175,13 @@ def _epoch_ms(value: Any) -> datetime | None:
     if value is None:
         return None
     try:
-        return datetime.fromtimestamp(int(value) / 1000, tz=UTC)
-    except (ValueError, TypeError, OSError):
+        millis = int(value)
+    except (ValueError, TypeError):
+        return None
+    # Some ArcGIS feeds use 0 / negative as "no timestamp"; don't render 1970.
+    if millis <= 0:
+        return None
+    try:
+        return datetime.fromtimestamp(millis / 1000, tz=UTC)
+    except (OverflowError, OSError):
         return None

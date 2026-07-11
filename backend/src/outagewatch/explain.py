@@ -68,7 +68,8 @@ class AnthropicClient:
             system=system,
             messages=[{"role": "user", "content": prompt}],
         )
-        return next(b.text for b in response.content if b.type == "text")
+        # Guard against a response with no text block (would raise StopIteration).
+        return next((b.text for b in response.content if b.type == "text"), "")
 
 
 class ExplainCache(Protocol):
@@ -142,11 +143,34 @@ def facts_from_item(item: Item, eta_history: list[dict[str, Any]] | None = None)
         est_customers=p.get("EST_CUSTOMERS"),
         city=p.get("CITY"),
         started_local=_local(_parse_iso(p.get("OUTAGE_START_TEXT"))),
-        eta_local=_local(item.eta),
+        eta_local=_local_eta(item.eta),
         is_psps=bool(p.get("is_psps")),
         is_fast_trip=bool(p.get("fts_flag")),
         eta_changes=eta_changes,
     )
+
+
+def fallback_explanation(item: Item, eta_history: list[dict[str, Any]] | None = None) -> str:
+    """A plain, deterministic summary used when the LLM call fails.
+
+    Uses only the same structured facts, so the card degrades gracefully instead
+    of erroring out.
+    """
+    f = facts_from_item(item, eta_history)
+    parts: list[str] = []
+    if f.is_psps:
+        parts.append("This is a planned Public Safety Power Shutoff (PSPS) by PG&E.")
+    else:
+        parts.append("PG&E is reporting a power outage in this area.")
+    if f.cause:
+        parts.append(f"Reported cause: {f.cause}.")
+    if f.est_customers:
+        parts.append(f"About {f.est_customers} customers are affected.")
+    if f.eta_local:
+        parts.append(f"Estimated restoration: {f.eta_local}.")
+    else:
+        parts.append("PG&E has not posted a restoration estimate yet.")
+    return " ".join(parts)
 
 
 def cache_key(item: Item) -> str:
@@ -194,3 +218,17 @@ def _local(dt: datetime | None) -> str | None:
         return None
     local = dt.astimezone(PACIFIC)
     return local.strftime("%A %b %d at %I:%M %p").replace(" 0", " ")
+
+
+def _local_eta(dt: datetime | None) -> str | None:
+    """Restoration time in Pacific, flagged when it's already in the past.
+
+    PG&E ETORs routinely slip into the past without being updated; presenting a
+    stale future-looking time reads as broken and erodes trust.
+    """
+    if dt is None:
+        return None
+    formatted = _local(dt)
+    if dt < datetime.now(UTC):
+        return f"{formatted} (this estimate has already passed and has not been updated)"
+    return formatted

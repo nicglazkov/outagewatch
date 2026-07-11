@@ -46,6 +46,30 @@ _ZIP_TO_UTILITY: dict[str, str] = {
 }
 
 
+def _socal_utility(zip_code: str) -> str | None:
+    """Southern California is entirely outside PG&E territory.
+
+    PG&E serves only Northern/Central California; its lowest ZIPs are in the
+    93xxx range (Bakersfield/San Luis Obispo). Every ZIP below 93000 is Los
+    Angeles, Orange, San Diego, or the Inland Empire, served by SCE / LADWP /
+    SDG&E. Flagging that whole block warns those users instead of silently
+    signing them up for alerts that can never fire.
+    """
+    if len(zip_code) != 5 or not zip_code.isdigit():
+        return None
+    n = int(zip_code)
+    if 90000 <= n <= 90899:
+        return "Southern California Edison or LADWP"
+    if 90900 <= n <= 91899:
+        return "Southern California Edison"
+    if 91900 <= n <= 92199:
+        return "San Diego Gas & Electric"
+    if 92200 <= n <= 92999:
+        return "Southern California Edison"
+    return None
+
+
 def non_pge_utility(zip_code: str) -> str | None:
     """Name of the non-PG&E utility for this ZIP, or None if PG&E (or unknown)."""
-    return _ZIP_TO_UTILITY.get(zip_code)
+    z = zip_code.strip()[:5]
+    return _ZIP_TO_UTILITY.get(z) or _socal_utility(z)
