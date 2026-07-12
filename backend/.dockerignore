@@ -1,0 +1,17 @@
+# Keep local cruft and any stray secrets out of the build context / image.
+.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.env
+.env.*
+credentials*.json
+service-account*.json
+*-key.json
+*.pem
+*.key
+.git/
+.gitignore
+tests/

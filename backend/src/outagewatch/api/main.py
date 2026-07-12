@@ -37,12 +37,24 @@ logger = logging.getLogger(__name__)
 _SUBSCRIBE_LIMIT = RateLimiter(max_requests=30, window_seconds=60)
 _EXPLAIN_LIMIT = RateLimiter(max_requests=60, window_seconds=60)
 _GEOCODE_LIMIT = RateLimiter(max_requests=240, window_seconds=60)
+_READ_LIMIT = RateLimiter(max_requests=120, window_seconds=60)
+_DELETE_LIMIT = RateLimiter(max_requests=30, window_seconds=60)
+
+# A device never legitimately watches this many areas; caps runaway Firestore
+# growth that would slow the poller (which loads every subscription each cycle).
+MAX_SUBS_PER_TOKEN = 25
 
 
 def _client_ip(request: Request) -> str:
+    # On Cloud Run (*.run.app) the platform APPENDS the real client IP to the
+    # right of any client-supplied X-Forwarded-For, so the last entry is the
+    # trustworthy one. Keying off the leftmost value (which the caller controls)
+    # would let an attacker rotate it to get a fresh rate-limit bucket per request.
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
     return request.client.host if request.client else "unknown"
 
 
@@ -55,6 +67,11 @@ app = FastAPI(
     title="OutageWatch API",
     description="Power outage alerts for PG&E territory. Not affiliated with PG&E.",
     version="0.1.0",
+    # Don't publish an interactive schema on the public service; it would
+    # advertise the internal endpoints and the full request surface.
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 
@@ -93,7 +110,8 @@ def get_deps() -> Deps:
 
 
 class SubscriptionIn(BaseModel):
-    token: str = Field(min_length=8)
+    # Real FCM registration tokens are ~150+ chars; this rejects trivial junk.
+    token: str = Field(min_length=64, max_length=4096)
     platform: str = Field(default="android", pattern="^(android|ios|web)$")
     zip_code: str | None = Field(default=None, pattern=r"^\d{5}$")
     lat: float | None = Field(default=None, ge=32.0, le=42.5)
@@ -193,19 +211,28 @@ async def slo_summary(deps: Deps = Depends(get_deps)) -> dict[str, Any]:
 
 @app.get("/v1/outages", response_model=list[OutageOut])
 async def list_outages(
+    request: Request,
     zip_code: str | None = Query(default=None, alias="zip", pattern=r"^\d{5}$"),
-    lat: float | None = None,
-    lon: float | None = None,
+    lat: float | None = Query(default=None, ge=32.0, le=42.5),
+    lon: float | None = Query(default=None, ge=-125.0, le=-114.0),
     radius_km: float = Query(default=10.0, gt=0, le=100),
     include_geometry: bool = False,
     deps: Deps = Depends(get_deps),
 ) -> list[OutageOut]:
+    _rate_limit(_READ_LIMIT, request)
+    has_point = lat is not None and lon is not None
+    if (lat is None) != (lon is None):
+        raise HTTPException(status_code=400, detail="lat and lon must be provided together")
+    # Require a location filter: never return the entire statewide snapshot (which
+    # with include_geometry is multi-MB and re-downloads the whole state per call).
+    if not has_point and not zip_code:
+        return []
     snapshot = await deps.state.load() or {}
     items = list(snapshot.values())
-    if lat is not None and lon is not None:
+    if has_point:
         probe = MatcherSub(id="q", token="q", lat=lat, lon=lon, radius_km=radius_km)
         items = [i for i in items if item_matches(i, probe)]
-    elif zip_code:
+    else:
         area = zipcodes.lookup(zip_code)
         if area is None:
             raise HTTPException(status_code=404, detail="unknown California ZIP")
@@ -222,7 +249,10 @@ async def list_outages(
 
 
 @app.get("/v1/outages/{outage_id}")
-async def get_outage(outage_id: str, deps: Deps = Depends(get_deps)) -> dict[str, Any]:
+async def get_outage(
+    request: Request, outage_id: str, deps: Deps = Depends(get_deps)
+) -> dict[str, Any]:
+    _rate_limit(_READ_LIMIT, request)
     snapshot = await deps.state.load() or {}
     item = snapshot.get(outage_id)
     if item is None:
@@ -239,13 +269,18 @@ async def explain_outage_endpoint(
 ) -> dict[str, str]:
     import asyncio
 
-    from outagewatch.explain import explain_outage, fallback_explanation
+    from outagewatch.explain import cache_key, explain_outage, fallback_explanation
 
     _rate_limit(_EXPLAIN_LIMIT, request)
     snapshot = await deps.state.load() or {}
     item = snapshot.get(outage_id)
     if item is None:
         raise HTTPException(status_code=404, detail="outage not found or restored")
+    # Serve a cached explanation before doing any further work (no LLM call, no
+    # extra Firestore read), so repeated views of the same outage stay free.
+    cached = deps.explain_cache.get(cache_key(item))
+    if cached is not None:
+        return {"outage_id": outage_id, "explanation": cached}
     history = deps.eta_history.get(outage_id)
     try:
         # The LLM SDK call is blocking; run it off the event loop, and never let
@@ -264,6 +299,10 @@ async def create_subscription(
     request: Request, body: SubscriptionIn, deps: Deps = Depends(get_deps)
 ) -> dict[str, str]:
     _rate_limit(_SUBSCRIBE_LIMIT, request)
+    # Cap watched areas per device so runaway/junk creation can't bloat Firestore
+    # and slow the poller (which loads every subscription each cycle).
+    if len(deps.subs.list_for_device(body.token)) >= MAX_SUBS_PER_TOKEN:
+        raise HTTPException(status_code=429, detail="This device is watching too many areas.")
     data = body.model_dump()
     # A ZIP-only subscription matches by centroid + area-derived radius, the
     # same way an address subscription matches by its point.
@@ -334,21 +373,23 @@ async def get_zip(zip_code: str) -> dict[str, Any]:
     }
 
 
-@app.get("/v1/subscriptions")
-async def list_subscriptions(
-    token: str = Query(min_length=8), deps: Deps = Depends(get_deps)
-) -> list[dict[str, Any]]:
-    from dataclasses import asdict
-
-    return [asdict(s) for s in deps.subs.list_for_device(token)]
+def _is_sub_id(sub_id: str) -> bool:
+    # Subscription ids are uuid4().hex: exactly 32 lowercase hex characters.
+    return len(sub_id) == 32 and all(c in "0123456789abcdef" for c in sub_id)
 
 
 @app.delete("/v1/subscriptions/{sub_id}", status_code=204)
-async def delete_subscription(sub_id: str, deps: Deps = Depends(get_deps)) -> None:
+async def delete_subscription(
+    request: Request, sub_id: str, deps: Deps = Depends(get_deps)
+) -> None:
+    _rate_limit(_DELETE_LIMIT, request)
+    # Reject malformed ids before they reach Firestore (a reserved id would 500).
+    if not _is_sub_id(sub_id):
+        raise HTTPException(status_code=404, detail="subscription not found")
     deps.subs.delete(sub_id)
 
 
-@app.post("/internal/poll")
+@app.post("/internal/poll", include_in_schema=False)
 async def internal_poll(deps: Deps = Depends(get_deps)) -> dict[str, Any]:
     if os.environ.get("ENABLE_POLL", "0") != "1":
         raise HTTPException(status_code=404, detail="not found")

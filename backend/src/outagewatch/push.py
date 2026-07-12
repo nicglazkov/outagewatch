@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 
 from watcher.dispatch import PushMessage
 
 logger = logging.getLogger(__name__)
+
+
+def _tok(token: str) -> str:
+    """A short, non-reversible token fingerprint for logs (never log the token)."""
+    return hashlib.sha256(token.encode()).hexdigest()[:8]
 
 
 class FcmSender:
@@ -32,12 +38,18 @@ class FcmSender:
                 headers={"apns-collapse-id": message.collapse_key} if message.collapse_key else None
             ),
         )
+        from firebase_admin import exceptions as fb_exceptions
+
         try:
             await asyncio.to_thread(messaging.send, msg)
             return True
-        except messaging.UnregisteredError:
-            logger.info("dead token, dropping: %s...", message.token[:12])
+        except (messaging.UnregisteredError, messaging.SenderIdMismatchError):
+            logger.info("dead token, dropping %s", _tok(message.token))
+            return False
+        except fb_exceptions.InvalidArgumentError:
+            # A malformed/junk token: permanently invalid, so prune it too.
+            logger.info("invalid token, dropping %s", _tok(message.token))
             return False
         except Exception:
-            logger.exception("FCM send failed for token %s...", message.token[:12])
+            logger.exception("FCM send failed (transient) %s", _tok(message.token))
             return True  # transient: do not treat the token as dead
