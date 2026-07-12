@@ -17,11 +17,16 @@ SCHEDULER_SA="outagewatch-scheduler@${PROJECT}.iam.gserviceaccount.com"
 
 cd "$(dirname "$0")/.."
 
+# The Anthropic key comes from Secret Manager (never a plaintext env var), and is
+# declared here so a fresh deploy is reproducible and can't drop the binding.
+SECRETS="ANTHROPIC_API_KEY=anthropic-api-key:latest"
+
 gcloud run deploy outagewatch-poller \
   --source . --project "$PROJECT" --region "$REGION" \
   --service-account "$SA" \
   --no-allow-unauthenticated \
   --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT},DATA_BUCKET=outagewatch-data,ENABLE_POLL=1" \
+  --set-secrets "$SECRETS" \
   --memory 512Mi --max-instances 1
 
 gcloud run deploy outagewatch-api \
@@ -29,6 +34,7 @@ gcloud run deploy outagewatch-api \
   --service-account "$SA" \
   --allow-unauthenticated \
   --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT},DATA_BUCKET=outagewatch-data,ENABLE_POLL=0" \
+  --set-secrets "$SECRETS" \
   --memory 512Mi --max-instances 4
 
 POLLER_URL=$(gcloud run services describe outagewatch-poller \
