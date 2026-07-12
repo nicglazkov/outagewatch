@@ -16,19 +16,40 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from outagewatch import zipcodes
 from outagewatch.causes import humanize_cause
 from outagewatch.config import settings
+from outagewatch.ratelimit import RateLimiter
 from outagewatch.store import StoredSubscription
 from watcher.matcher import Subscription as MatcherSub
 from watcher.matcher import item_matches
 from watcher.types import Item
 
 logger = logging.getLogger(__name__)
+
+# Per-IP limits. Generous on purpose (mobile users share carrier IPs); these stop
+# a runaway script, not real usage. Subscriptions is the one that must be capped
+# (uncapped Firestore writes); nobody legitimately adds 30 areas a minute.
+_SUBSCRIBE_LIMIT = RateLimiter(max_requests=30, window_seconds=60)
+_EXPLAIN_LIMIT = RateLimiter(max_requests=60, window_seconds=60)
+_GEOCODE_LIMIT = RateLimiter(max_requests=240, window_seconds=60)
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _rate_limit(limiter: RateLimiter, request: Request) -> None:
+    if not limiter.allow(_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
+
 
 app = FastAPI(
     title="OutageWatch API",
@@ -214,12 +235,13 @@ async def get_outage(outage_id: str, deps: Deps = Depends(get_deps)) -> dict[str
 
 @app.get("/v1/outages/{outage_id}/explain")
 async def explain_outage_endpoint(
-    outage_id: str, deps: Deps = Depends(get_deps)
+    request: Request, outage_id: str, deps: Deps = Depends(get_deps)
 ) -> dict[str, str]:
     import asyncio
 
     from outagewatch.explain import explain_outage, fallback_explanation
 
+    _rate_limit(_EXPLAIN_LIMIT, request)
     snapshot = await deps.state.load() or {}
     item = snapshot.get(outage_id)
     if item is None:
@@ -239,8 +261,9 @@ async def explain_outage_endpoint(
 
 @app.post("/v1/subscriptions", status_code=201)
 async def create_subscription(
-    body: SubscriptionIn, deps: Deps = Depends(get_deps)
+    request: Request, body: SubscriptionIn, deps: Deps = Depends(get_deps)
 ) -> dict[str, str]:
+    _rate_limit(_SUBSCRIBE_LIMIT, request)
     data = body.model_dump()
     # A ZIP-only subscription matches by centroid + area-derived radius, the
     # same way an address subscription matches by its point.
@@ -268,6 +291,7 @@ class SuggestionOut(BaseModel):
 
 @app.get("/v1/geocode/autocomplete", response_model=list[SuggestionOut])
 async def geocode_autocomplete(
+    request: Request,
     q: str = Query(min_length=1, max_length=120),
     lat: float | None = Query(default=None, ge=32.0, le=42.5),
     lon: float | None = Query(default=None, ge=-125.0, le=-114.0),
@@ -275,6 +299,7 @@ async def geocode_autocomplete(
 ) -> list[SuggestionOut]:
     """Google-Maps-style address suggestions, biased to the caller's location and
     kept to California. Each hit is pre-resolved to a ZIP + territory status."""
+    _rate_limit(_GEOCODE_LIMIT, request)
     hits = await deps.geocoder.autocomplete(q, lat, lon)
     return [
         SuggestionOut(
