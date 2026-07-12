@@ -42,6 +42,9 @@ import androidx.compose.ui.unit.sp
 import com.glazkov.outagewatch.data.AlertPrefs
 import com.glazkov.outagewatch.data.SavedLocation
 import com.glazkov.outagewatch.ui.AppGraph
+import com.glazkov.outagewatch.ui.AppInfo
+import com.glazkov.outagewatch.ui.ExternalLinks
+import com.glazkov.outagewatch.ui.Links
 import com.glazkov.outagewatch.ui.detail.NavBar
 import com.glazkov.outagewatch.ui.theme.Cell
 import com.glazkov.outagewatch.ui.theme.GroupedFootnote
@@ -150,6 +153,23 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
             GroupedFootnote("OutageWatch is free and account-less. Not affiliated with PG&E.")
+
+            SectionHeader("About")
+            GroupedSection {
+                Cell(title = "Version", trailing = AppInfo.version.ifBlank { "-" })
+                Cell(
+                    title = "Privacy Policy", chevron = true,
+                    onClick = { ExternalLinks.open(Links.PRIVACY) },
+                )
+                Cell(
+                    title = "Terms of Use", chevron = true,
+                    onClick = { ExternalLinks.open(Links.TERMS) },
+                )
+                Cell(
+                    title = "Send feedback", chevron = true, showSeparator = false,
+                    onClick = { ExternalLinks.open(Links.FEEDBACK) },
+                )
+            }
             Spacer(Modifier.height(24.dp))
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
