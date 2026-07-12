@@ -2,6 +2,7 @@ package com.glazkov.outagewatch
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -13,6 +14,8 @@ import com.glazkov.outagewatch.data.DeviceLocation
 import com.glazkov.outagewatch.location.AndroidLocationFinder
 import com.glazkov.outagewatch.ui.App
 import com.glazkov.outagewatch.ui.AppGraph
+import com.glazkov.outagewatch.ui.AppInfo
+import com.glazkov.outagewatch.ui.ExternalLinks
 import com.glazkov.outagewatch.ui.PendingOutage
 import kotlinx.coroutines.launch
 
@@ -28,6 +31,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         DeviceLocation.finder = locationFinder
+        AppInfo.version = BuildConfig.VERSION_NAME
+        ExternalLinks.opener = { url ->
+            runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        }
         if (Build.VERSION.SDK_INT >= 33) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }

@@ -39,6 +39,27 @@ object PendingOutage {
     val id = MutableStateFlow<String?>(null)
 }
 
+/** Opens a URL (or mailto:) in the platform browser/mail app. Set by the host. */
+object ExternalLinks {
+    var opener: ((String) -> Unit)? = null
+
+    fun open(url: String) {
+        opener?.invoke(url)
+    }
+}
+
+/** App metadata surfaced in Settings. Set by the host from its build config. */
+object AppInfo {
+    var version: String = ""
+}
+
+/** Where the legal docs and feedback go. Update if you move to a custom domain. */
+object Links {
+    const val PRIVACY = "https://github.com/nicglazkov/outagewatch/blob/main/PRIVACY.md"
+    const val TERMS = "https://github.com/nicglazkov/outagewatch/blob/main/TERMS.md"
+    const val FEEDBACK = "mailto:nic@glazkov.com?subject=OutageWatch%20feedback"
+}
+
 @Serializable object HomeRoute
 @Serializable object AddLocationRoute
 @Serializable object SettingsRoute
