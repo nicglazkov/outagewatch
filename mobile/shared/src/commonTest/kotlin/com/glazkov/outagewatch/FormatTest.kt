@@ -2,7 +2,7 @@ package com.glazkov.outagewatch
 
 import com.glazkov.outagewatch.ui.formatEta
 import com.glazkov.outagewatch.ui.formatIso
-import com.glazkov.outagewatch.ui.nearby.haversineKm
+import com.glazkov.outagewatch.ui.haversineKm
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
