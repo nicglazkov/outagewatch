@@ -29,6 +29,8 @@ def client():
         api_main._READ_LIMIT, api_main._DELETE_LIMIT,
     ):
         lim._hits.clear()
+    api_main._slo_cache = None  # don't leak a cached summary across tests
+    api_main._snapshot_cache = None  # nor a cached snapshot
     deps = FakeDeps()
     api_main.app.dependency_overrides[api_main.get_deps] = lambda: deps
     yield TestClient(api_main.app), deps
@@ -154,6 +156,15 @@ def test_subscription_lifecycle(client):
     assert deps.subs.list_all() == []
 
 
+def test_snapshot_is_cached_across_reads(client):
+    c, deps = client
+    deps.state.snapshot = {"o1": _outage()}
+    assert c.get("/v1/outages", params={"zip": "95404"}).status_code == 200
+    assert c.get("/v1/outages/o1").status_code == 200
+    # Two reads, but the statewide blob is downloaded from "GCS" only once.
+    assert deps.state.load_calls == 1
+
+
 def test_outages_requires_a_filter(client):
     c, deps = client
     deps.state.snapshot = {"o1": _outage()}
@@ -256,3 +267,27 @@ def test_slo_summary_percentiles(client):
 def test_slo_summary_empty(client):
     c, _ = client
     assert c.get("/v1/slo").json() == {"count": 0, "target_seconds": 360}
+
+
+def test_slo_is_rate_limited(client):
+    c, _ = client
+    # /v1/slo hits Firestore per call, so it must be throttled like other reads.
+    codes = {c.get("/v1/slo").status_code for _ in range(api_main._READ_LIMIT.max + 5)}
+    assert 429 in codes
+
+
+def test_slo_caches_firestore_reads(client):
+    c, deps = client
+    deps.slo.latencies = [30.0, 60.0]
+    first = c.get("/v1/slo").json()
+    # A second call within the TTL must serve from cache, not re-read the store.
+    deps.slo.latencies = [999.0]  # would change the answer if it were re-read
+    second = c.get("/v1/slo").json()
+    assert first == second
+    assert deps.slo.read_calls == 1
+
+
+def test_zip_lookup_is_rate_limited(client):
+    c, _ = client
+    codes = {c.get("/v1/zips/95404").status_code for _ in range(api_main._READ_LIMIT.max + 5)}
+    assert 429 in codes

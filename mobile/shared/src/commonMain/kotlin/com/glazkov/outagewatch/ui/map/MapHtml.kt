@@ -37,7 +37,10 @@ fun buildMapHtml(
             )
         }
     }
-    val data = Json.encodeToString(JsonArray.serializer(), features)
+    // Escape '<' so a feed string like "</script>" can't break out of the inline
+    // <script> block below. Inside a JS string, < is just '<', so the JSON
+    // still parses identically; only the HTML parser is kept from seeing a tag.
+    val data = Json.encodeToString(JsonArray.serializer(), features).replace("<", "\\u003c")
     val bg = if (dark) "#111" else "#fff"
     val styleUrl = if (dark) {
         "https://tiles.openfreemap.org/styles/dark"
@@ -87,15 +90,22 @@ var map = new maplibregl.Map({
 map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 if ($zoomControl) { map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left'); }
 
+// Escape feed-sourced strings before they go into popup HTML (the cause text
+// comes from PG&E's feed, so treat it as untrusted).
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
 function popupHtml(o) {
   var eta = o.eta ? new Date(o.eta).toLocaleString('en-US', {
     timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit' }) : 'no estimate yet';
   return '<div class="popup"><b>' + (o.psps ? 'PSPS shutoff' : 'Power outage') + '</b><br>'
-    + o.cause + '<br>'
+    + esc(o.cause) + '<br>'
     + (o.customers != null ? o.customers + ' customers<br>' : '')
-    + 'Restoration: ' + eta
-    + '<br><a href="ow://outage/' + o.id + '">Details &rarr;</a></div>';
+    + 'Restoration: ' + esc(eta)
+    + '<br><a href="ow://outage/' + encodeURIComponent(o.id) + '">Details &rarr;</a></div>';
 }
 
 // Walk every [lon,lat] of a GeoJSON geometry (Polygon/MultiPolygon/Point/Line).
