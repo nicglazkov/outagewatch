@@ -152,8 +152,27 @@ def test_subscription_lifecycle(client):
         json={"token": TOKEN, "lat": 38.44, "lon": -122.71, "radius_km": 2},
     ).json()["id"]
     assert [s.id for s in deps.subs.list_all()] == [sub_id]
-    assert c.delete(f"/v1/subscriptions/{sub_id}").status_code == 204
+    r = c.delete(f"/v1/subscriptions/{sub_id}", headers={"X-Device-Token": TOKEN})
+    assert r.status_code == 204
     assert deps.subs.list_all() == []
+
+
+def test_delete_requires_owning_token(client):
+    c, deps = client
+    sub_id = c.post(
+        "/v1/subscriptions",
+        json={"token": TOKEN, "lat": 38.44, "lon": -122.71, "radius_km": 2},
+    ).json()["id"]
+    # No token, or a different device's token, must not delete someone's sub.
+    assert c.delete(f"/v1/subscriptions/{sub_id}").status_code == 404
+    assert c.delete(
+        f"/v1/subscriptions/{sub_id}", headers={"X-Device-Token": "e" * 152}
+    ).status_code == 404
+    assert deps.subs.list_all() != []  # still there
+    # The owning token succeeds.
+    assert c.delete(
+        f"/v1/subscriptions/{sub_id}", headers={"X-Device-Token": TOKEN}
+    ).status_code == 204
 
 
 def test_snapshot_is_cached_across_reads(client):

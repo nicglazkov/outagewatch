@@ -9,6 +9,7 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSURL
 import platform.WebKit.WKNavigationActionPolicy
 import platform.WebKit.WKNavigationDelegateProtocol
+import platform.WebKit.WKNavigationType
 import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
 import platform.WebKit.WKNavigationAction
@@ -40,8 +41,16 @@ actual fun OutageMapView(
                 decisionHandler: (WKNavigationActionPolicy) -> Unit,
             ) {
                 val url = decidePolicyForNavigationAction.request.URL
+                val isLinkTap =
+                    decidePolicyForNavigationAction.navigationType ==
+                        WKNavigationType.WKNavigationTypeLinkActivated
                 if (url?.scheme == "ow" && url.host == "outage") {
                     url.lastPathComponent?.let(onOutageTap)
+                    decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+                } else if (isLinkTap) {
+                    // A tapped link (e.g. map attribution) must never navigate the
+                    // WebView's own frame; block it. Everything that is not a link
+                    // tap (the initial load, internal script) is allowed through.
                     decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
                 } else {
                     decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyAllow)

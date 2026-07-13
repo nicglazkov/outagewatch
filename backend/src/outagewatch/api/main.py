@@ -17,7 +17,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -413,11 +413,22 @@ def _is_sub_id(sub_id: str) -> bool:
 
 @app.delete("/v1/subscriptions/{sub_id}", status_code=204)
 async def delete_subscription(
-    request: Request, sub_id: str, deps: Deps = Depends(get_deps)
+    request: Request,
+    sub_id: str,
+    deps: Deps = Depends(get_deps),
+    x_device_token: str | None = Header(default=None),
 ) -> None:
     _rate_limit(_DELETE_LIMIT, request)
     # Reject malformed ids before they reach Firestore (a reserved id would 500).
     if not _is_sub_id(sub_id):
+        raise HTTPException(status_code=404, detail="subscription not found")
+    # Ownership: only delete a subscription that belongs to the caller's own
+    # device token. Without the owning token, behave as if it doesn't exist so
+    # a guessed id leaks nothing about whether it's real.
+    owned = x_device_token and any(
+        s.id == sub_id for s in deps.subs.list_for_device(x_device_token)
+    )
+    if not owned:
         raise HTTPException(status_code=404, detail="subscription not found")
     deps.subs.delete(sub_id)
 

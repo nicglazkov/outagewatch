@@ -6,6 +6,7 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -80,8 +81,14 @@ class OutageApi(private val client: HttpClient = defaultClient()) {
             setBody(request)
         }.body()
 
-    suspend fun unsubscribe(subscriptionId: String) {
-        client.delete("${ApiConfig.baseUrl}/v1/subscriptions/$subscriptionId")
+    /**
+     * Release a subscription. The backend only deletes it if [deviceToken] owns
+     * it, so a leaked id alone can't unsubscribe someone else's device.
+     */
+    suspend fun unsubscribe(subscriptionId: String, deviceToken: String?) {
+        client.delete("${ApiConfig.baseUrl}/v1/subscriptions/$subscriptionId") {
+            if (deviceToken != null) header("X-Device-Token", deviceToken)
+        }
     }
 
     companion object {

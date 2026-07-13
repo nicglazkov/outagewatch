@@ -133,7 +133,7 @@ class LocationsRepository(
         // Re-adding the same area must release its old subscription first, or the
         // backend keeps both and the user gets duplicate notifications.
         _locations.value.firstOrNull { it.id == base.id }?.subscriptionId
-            ?.let { runCatching { api.unsubscribe(it) } }
+            ?.let { runCatching { api.unsubscribe(it, PushTokens.current()) } }
         val location = base.copy(subscriptionId = subscribeFor(base))
         _locations.value = _locations.value.filter { it.id != location.id } + location
         persist()
@@ -142,7 +142,7 @@ class LocationsRepository(
 
     suspend fun remove(location: SavedLocation) = mutex.withLock {
         _locations.value.firstOrNull { it.id == location.id }?.subscriptionId
-            ?.let { runCatching { api.unsubscribe(it) } }
+            ?.let { runCatching { api.unsubscribe(it, PushTokens.current()) } }
         _locations.value = _locations.value.filter { it.id != location.id }
         persist()
     }
@@ -189,7 +189,7 @@ class LocationsRepository(
 
     private suspend fun resubscribeAll() = mutex.withLock {
         _locations.value = _locations.value.map { location ->
-            location.subscriptionId?.let { runCatching { api.unsubscribe(it) } }
+            location.subscriptionId?.let { runCatching { api.unsubscribe(it, PushTokens.current()) } }
             location.copy(subscriptionId = subscribeFor(location))
         }
         persist()
