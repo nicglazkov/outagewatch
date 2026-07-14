@@ -52,11 +52,11 @@
 
 Pick your ZIP code or a precise address, and OutageWatch watches PG&amp;E's public outage map for you.
 
-- ⚡ **Push the moment it matters.** A notification when an outage starts at your location, when the restoration estimate moves, when power is back, and when a PSPS safety shutoff is coming.
-- 🗺️ **See it on a map.** Your watched areas, live outage footprints, restoration estimates, and how many customers are affected.
-- 🤖 **Plain-language answers.** Every outage has a short "what's going on and when is it coming back" written from the real feed data, not marketing copy.
-- 🌙 **Quiet hours.** No overnight buzzing, except a planned-safety-shutoff warning, which always comes through.
-- 🔒 **No account, no sign-up, no ads.** Your saved areas stay on your device.
+- **Push the moment it matters.** A notification when an outage starts at your location, when the restoration estimate moves, when power is back, and when a PSPS safety shutoff is coming.
+- **See it on a map.** Your watched areas, live outage footprints, restoration estimates, and how many customers are affected.
+- **Plain-language answers.** Every outage has a short "what's going on and when is it coming back" written from the real feed data, not marketing copy.
+- **Quiet hours.** No overnight buzzing, except a planned-safety-shutoff warning, which always comes through.
+- **No account, no sign-up, no ads.** Your saved areas stay on your device.
 
 ### Only four things ever notify you
 
@@ -143,9 +143,9 @@ OutageWatch has no accounts and collects no analytics. Your saved areas and a pu
 
 ## Contributing &amp; support
 
-- 🐛 Found a bug or have an idea? [Open an issue](https://github.com/nicglazkov/outagewatch/issues).
-- 🔒 Security report? See [SECURITY.md](SECURITY.md).
-- 🤝 Want to help? [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
+- Found a bug or have an idea? [Open an issue](https://github.com/nicglazkov/outagewatch/issues).
+- Security report? See [SECURITY.md](SECURITY.md).
+- Want to help? [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
