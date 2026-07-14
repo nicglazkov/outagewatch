@@ -1,0 +1,72 @@
+name: Bug report
+description: Report something that isn't working in OutageWatch
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in as much as you
+        can so the problem is easy to reproduce.
+
+        One thing to keep in mind: OutageWatch reads PG&E's public outage feed,
+        and that feed can lag behind real conditions. If an outage seems missing
+        or out of date, it may be the upstream data catching up rather than a bug
+        in the app. If you're confident it's the app, please report it anyway.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: A clear description of the problem, and what you expected instead is covered below.
+      placeholder: Tell us what went wrong.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we make it happen?
+      placeholder: |
+        1. Open the app
+        2. Go to '...'
+        3. Tap '...'
+        4. See the problem
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: You'll find this in Settings > About.
+      placeholder: "1.2.0"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS version
+      description: Device model plus Android or iOS version.
+      placeholder: "Pixel 7, Android 15  /  iPhone 14, iOS 18.1"
+    validations:
+      required: true
+  - type: input
+    id: area
+    attributes:
+      label: ZIP or area (if relevant)
+      description: If the bug relates to a specific location or outage, which ZIP or area? Leave blank if it doesn't apply.
+      placeholder: "94110"
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, timestamps, or other context that might help.
+    validations:
+      required: false
