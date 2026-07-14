@@ -90,4 +90,5 @@ Continued use of the app after an update means you accept the revised policy.
 
 ## Contact
 
-Questions about this policy or your data: **nic@glazkov.com**.
+Questions about this policy or your data: open an issue at
+https://github.com/nicglazkov/outagewatch/issues.

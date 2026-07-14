@@ -21,7 +21,10 @@ from watcher.types import Item, Snapshot
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = "outagewatch/0.1 (unaffiliated outage alerts; contact: nic@glazkov.com)"
+USER_AGENT = (
+    "outagewatch/0.1 (unaffiliated outage alerts; "
+    "contact: https://github.com/nicglazkov/outagewatch)"
+)
 
 AGS_BASE = "https://ags.pge.esriemcs.com/arcgis/rest/services/43/outages/MapServer"
 STATUS_URL = "https://outages.pge.esriemcs.com/arcgis/rest/services/43/outages/status.json"

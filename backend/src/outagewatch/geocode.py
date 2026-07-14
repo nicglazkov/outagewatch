@@ -25,7 +25,10 @@ from outagewatch.territory import non_pge_utility
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = "outagewatch/0.1 (unaffiliated outage alerts; contact: nic@glazkov.com)"
+USER_AGENT = (
+    "outagewatch/0.1 (unaffiliated outage alerts; "
+    "contact: https://github.com/nicglazkov/outagewatch)"
+)
 PHOTON_URL = "https://photon.komoot.io/api/"
 CENSUS_URL = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
 
