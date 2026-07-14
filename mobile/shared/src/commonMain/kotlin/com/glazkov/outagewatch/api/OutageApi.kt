@@ -14,12 +14,21 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 object ApiConfig {
     // Cloud Run URL for the outagewatch-api service; updated at deploy time.
     var baseUrl: String = "https://outagewatch-api-7bi2fdpqrq-uw.a.run.app"
 }
+
+/** A GitHub release, as much of it as the update check needs. */
+@Serializable
+data class ReleaseInfo(
+    @SerialName("tag_name") val tagName: String? = null,
+    @SerialName("html_url") val htmlUrl: String? = null,
+)
 
 class OutageApi(private val client: HttpClient = defaultClient()) {
 
@@ -89,6 +98,17 @@ class OutageApi(private val client: HttpClient = defaultClient()) {
         client.delete("${ApiConfig.baseUrl}/v1/subscriptions/$subscriptionId") {
             if (deviceToken != null) header("X-Device-Token", deviceToken)
         }
+    }
+
+    /**
+     * The latest published GitHub release, used for the in-app update check.
+     * Returns null on any error so a failed check never disrupts the app.
+     */
+    suspend fun latestRelease(): ReleaseInfo? {
+        val resp = client.get("https://api.github.com/repos/nicglazkov/outagewatch/releases/latest") {
+            header("Accept", "application/vnd.github+json")
+        }
+        return if (resp.status == HttpStatusCode.OK) resp.body() else null
     }
 
     companion object {
