@@ -72,7 +72,7 @@ Outage detail includes a short, calm answer to "why is my power out and when is 
 
 ```mermaid
 flowchart LR
-    PGE["PG&E ArcGIS<br/>outage feed"]
+    PGE["PGE ArcGIS<br/>outage feed"]
     subgraph cloud ["Google Cloud Run"]
         direction TB
         Poller["Poller<br/>fetch every 5 min,<br/>diff vs last state"]
