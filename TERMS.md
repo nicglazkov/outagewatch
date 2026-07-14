@@ -66,4 +66,5 @@ its conflict-of-laws rules.
 
 ## Contact
 
-Questions about these terms: **nic@glazkov.com**.
+Questions about these terms: open an issue at
+https://github.com/nicglazkov/outagewatch/issues.

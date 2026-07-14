@@ -57,7 +57,7 @@ object AppInfo {
 object Links {
     const val PRIVACY = "https://github.com/nicglazkov/outagewatch/blob/main/PRIVACY.md"
     const val TERMS = "https://github.com/nicglazkov/outagewatch/blob/main/TERMS.md"
-    const val FEEDBACK = "mailto:nic@glazkov.com?subject=OutageWatch%20feedback"
+    const val FEEDBACK = "https://github.com/nicglazkov/outagewatch/issues"
 }
 
 @Serializable object HomeRoute
