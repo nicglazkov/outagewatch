@@ -288,6 +288,25 @@ def test_slo_summary_empty(client):
     assert c.get("/v1/slo").json() == {"count": 0, "target_seconds": 360}
 
 
+def test_statewide_returns_all_outages(client):
+    c, deps = client
+    deps.state.snapshot = {"o1": _outage(), "o2": _outage(oid="o2", lat=39.5, lon=-121.5)}
+    body = c.get("/v1/statewide").json()
+    assert {o["id"] for o in body} == {"o1", "o2"}
+    assert body[0]["geometry"] is not None  # include_geometry defaults to true
+
+
+def test_web_pages_and_workers_served(client):
+    c, _ = client
+    for path in ("/", "/statewide", "/privacy", "/terms", "/widget"):
+        assert c.get(path).status_code == 200, path
+    sw = c.get("/sw.js")
+    assert sw.status_code == 200 and "javascript" in sw.headers["content-type"]
+    assert c.get("/firebase-messaging-sw.js").headers.get("service-worker-allowed") == "/"
+    assert c.get("/static/js/app.js").status_code == 200
+    assert c.get("/static/manifest.webmanifest").status_code == 200
+
+
 def test_slo_is_rate_limited(client):
     c, _ = client
     # /v1/slo hits Firestore per call, so it must be throttled like other reads.

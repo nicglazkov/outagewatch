@@ -19,6 +19,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from outagewatch import zipcodes
@@ -202,9 +203,68 @@ async def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+_STATIC = Path(__file__).parent / "static"
+
+
+def _page(name: str) -> FileResponse:
+    return FileResponse(_STATIC / name)
+
+
+def _worker(name: str) -> FileResponse:
+    # Service workers are served from the site root so their scope is "/".
+    return FileResponse(
+        _STATIC / name,
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+    )
+
+
 @app.get("/", include_in_schema=False)
 async def status_page() -> FileResponse:
-    return FileResponse(Path(__file__).parent / "static" / "index.html")
+    return _page("index.html")
+
+
+@app.get("/statewide", include_in_schema=False)
+async def statewide_page() -> FileResponse:
+    return _page("statewide.html")
+
+
+@app.get("/widget", include_in_schema=False)
+async def widget_page() -> FileResponse:
+    return _page("widget.html")
+
+
+@app.get("/privacy", include_in_schema=False)
+async def privacy_page() -> FileResponse:
+    return _page("privacy.html")
+
+
+@app.get("/terms", include_in_schema=False)
+async def terms_page() -> FileResponse:
+    return _page("terms.html")
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def sw_js() -> FileResponse:
+    return _worker("sw.js")
+
+
+@app.get("/firebase-messaging-sw.js", include_in_schema=False)
+async def fcm_sw_js() -> FileResponse:
+    return _worker("firebase-messaging-sw.js")
+
+
+@app.get("/v1/statewide", response_model=list[OutageOut])
+async def list_statewide(
+    request: Request,
+    include_geometry: bool = True,
+    deps: Deps = Depends(get_deps),
+) -> list[OutageOut]:
+    """Every current outage, for the statewide map. Reads the in-process snapshot
+    cache (no per-request GCS fetch) and is rate limited like other reads."""
+    _rate_limit(_READ_LIMIT, request)
+    snapshot = await _load_snapshot(deps)
+    return [_to_out(i, include_geometry) for i in snapshot.values()]
 
 
 @app.get("/v1/slo")
@@ -454,3 +514,8 @@ async def internal_poll(deps: Deps = Depends(get_deps)) -> dict[str, Any]:
 
 def _parse_dt(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value else None
+
+
+# Serve the website assets (css, js, icons, manifest, embeddable widget). Mounted
+# last so it never shadows the API routes above.
+app.mount("/static", StaticFiles(directory=_STATIC), name="static")

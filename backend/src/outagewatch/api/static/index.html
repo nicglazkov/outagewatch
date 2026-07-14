@@ -3,110 +3,126 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OutageWatch - PG&E outage status</title>
-<style>
-  :root { color-scheme: light dark; }
-  body {
-    font-family: system-ui, sans-serif;
-    max-width: 640px;
-    margin: 0 auto;
-    padding: 24px 16px;
-    line-height: 1.5;
-  }
-  h1 { font-size: 1.6rem; margin-bottom: 4px; }
-  .sub { color: gray; margin-top: 0; }
-  form { display: flex; gap: 8px; margin: 24px 0; }
-  input {
-    flex: 1;
-    font-size: 1.1rem;
-    padding: 10px 12px;
-    border: 1px solid gray;
-    border-radius: 8px;
-    background: transparent;
-    color: inherit;
-  }
-  button {
-    font-size: 1.1rem;
-    padding: 10px 18px;
-    border: none;
-    border-radius: 8px;
-    background: #ffc94a;
-    color: #1a1a2e;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .card {
-    border: 1px solid rgba(128,128,128,0.4);
-    border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 12px;
-  }
-  .card h3 { margin: 0 0 4px; font-size: 1.05rem; }
-  .card p { margin: 2px 0; font-size: 0.95rem; }
-  .ok { color: #2e9e44; font-weight: 600; }
-  .bad { color: #d64545; font-weight: 600; }
-  .disclaimer { color: gray; font-size: 0.85rem; margin-top: 32px; }
-</style>
+<title>OutageWatch - Live PG&E power outage status and alerts</title>
+<meta name="description" content="Check live PG&E power outages by ZIP or address, see restoration times, and get free alerts. No account.">
+<meta name="theme-color" content="#1a1a2e">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="icon" href="/static/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+<link rel="stylesheet" href="/static/css/app.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+      integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous">
+<meta property="og:title" content="OutageWatch">
+<meta property="og:description" content="Live PG&E power outage status and free alerts. No account.">
+<meta property="og:image" content="/static/icons/social-preview.png">
+<meta property="og:type" content="website">
 </head>
 <body>
-<h1>&#9889; OutageWatch</h1>
-<p class="sub">Live PG&E outage status by ZIP. Free, no account.</p>
 
-<form id="f">
-  <input id="zip" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"
-         placeholder="ZIP code, e.g. 95404" required>
-  <button type="submit">Check</button>
-</form>
+<nav class="nav"><div class="wrap nav-in">
+  <a class="brand" href="/"><img src="/static/icons/icon-192.png" alt=""> OutageWatch</a>
+  <div class="nav-links">
+    <a href="/statewide">Statewide map</a>
+    <a href="#get-the-app">Get the app</a>
+    <a href="https://github.com/nicglazkov/outagewatch" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div></nav>
 
-<div id="result"></div>
+<main>
+  <section class="wrap hero">
+    <h1>Is your power out?</h1>
+    <p class="lead">Live PG&amp;E outage status by ZIP or address, with restoration times and free alerts. No account.</p>
 
-<p class="disclaimer">
-  Not affiliated with PG&amp;E. Data comes from PG&amp;E's public outage map and
-  can lag. For emergencies call 911; report downed lines to PG&amp;E at
-  1-800-743-5000. Want push alerts? The OutageWatch app for Android and iOS
-  notifies you the moment an outage hits your area.
-</p>
+    <div class="checker">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-mode="zip" role="tab">ZIP code</button>
+        <button class="tab" data-mode="address" role="tab">Address</button>
+      </div>
 
-<script>
-const f = document.getElementById("f");
-const result = document.getElementById("result");
+      <form id="zip-form" class="field-row">
+        <input id="zip-input" class="field" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"
+               placeholder="ZIP code, e.g. 95404" autocomplete="postal-code" required>
+        <button class="btn btn-primary" type="submit">Check</button>
+      </form>
 
-function etaText(iso) {
-  if (!iso) return "No restoration estimate yet";
-  const d = new Date(iso);
-  return "Estimated restoration: " + d.toLocaleString("en-US", {
-    timeZone: "America/Los_Angeles",
-    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
-  });
-}
+      <form id="addr-form" class="field-row hidden">
+        <div class="ac" style="flex:1">
+          <input id="addr-input" class="field" placeholder="Street address or place" autocomplete="off">
+          <div id="addr-list" class="ac-list hidden"></div>
+        </div>
+        <button class="btn btn-primary" type="submit">Check</button>
+      </form>
 
-f.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const zip = document.getElementById("zip").value;
-  result.innerHTML = "<p>Checking&hellip;</p>";
-  try {
-    const r = await fetch(`/v1/outages?zip=${zip}`);
-    if (r.status === 404) {
-      result.innerHTML = "<p class='bad'>That doesn't look like a California ZIP we cover.</p>";
-      return;
-    }
-    const outages = await r.json();
-    if (outages.length === 0) {
-      result.innerHTML = `<div class="card"><h3 class="ok">No outages reported near ${zip}</h3>
-        <p>PG&E's feed shows nothing in this area right now.</p></div>`;
-      return;
-    }
-    result.innerHTML = outages.map(o => `
-      <div class="card">
-        <h3 class="bad">${o.is_psps ? "PSPS shutoff" : "Power outage"}${o.city ? " - " + o.city : ""}</h3>
-        <p>${[o.cause, o.crew_status, o.est_customers ? o.est_customers + " customers" : null]
-              .filter(Boolean).join(" &middot; ")}</p>
-        <p>${etaText(o.eta)}</p>
-      </div>`).join("");
-  } catch {
-    result.innerHTML = "<p class='bad'>Couldn't reach the outage feed. Try again shortly.</p>";
-  }
-});
-</script>
+      <div class="locate">
+        <button id="locate-btn" class="link-btn" type="button">Use my current location</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div id="result" class="result"></div>
+    <div id="map"></div>
+  </section>
+
+  <section class="wrap" id="alerts">
+    <div class="push">
+      <h3>Get outage alerts in your browser</h3>
+      <p>A notification when an outage starts in your area, when the estimate moves, and when power is back. Free, no account.</p>
+      <button id="push-btn" class="btn btn-primary" type="button">Turn on browser alerts</button>
+      <p id="push-status" style="margin-top:10px;min-height:1em"></p>
+    </div>
+  </section>
+
+  <section class="section"><div class="wrap">
+    <h2>How it works</h2>
+    <p class="sub">OutageWatch watches PG&amp;E's public outage map so you do not have to.</p>
+    <div class="grid">
+      <div class="feature"><h3>Only what matters</h3><p>Alerts fire when an outage starts, when the restoration estimate moves, when power returns, and for planned safety shutoffs. Nothing else.</p></div>
+      <div class="feature"><h3>Plain-language answers</h3><p>Each outage gets a short, calm explanation of what is going on and when power is expected back, written from the real feed data.</p></div>
+      <div class="feature"><h3>See it on a map</h3><p>Live outage footprints, restoration times, and how many customers are affected, right where you are.</p></div>
+      <div class="feature"><h3>No account, no ads</h3><p>Free to use. No sign-up, no analytics, no tracking. Your saved area stays on your device.</p></div>
+    </div>
+  </div></section>
+
+  <section class="section" id="get-the-app"><div class="wrap">
+    <h2>Get the app</h2>
+    <p class="sub">Android now. iOS and the app stores land in August 2026. Or just use this page, no install needed.</p>
+    <div class="stores">
+      <a class="store primary" href="https://github.com/nicglazkov/outagewatch/releases/latest" target="_blank" rel="noopener">
+        Download Android APK<small>Sideload from GitHub</small></a>
+      <span class="store" aria-disabled="true">App Store<small>Coming August 2026</small></span>
+      <span class="store" aria-disabled="true">Google Play<small>Coming August 2026</small></span>
+    </div>
+  </div></section>
+
+  <section class="section faq"><div class="wrap" style="max-width:680px">
+    <h2>Questions</h2>
+    <details><summary>Is this an official PG&amp;E service?</summary><p>No. OutageWatch is not affiliated with PG&amp;E. It reads PG&amp;E's public outage map and can lag behind reality. For emergencies call 911. Report downed power lines to PG&amp;E at 1-800-743-5000.</p></details>
+    <details><summary>Is it free?</summary><p>Yes, completely free, with no account and no ads.</p></details>
+    <details><summary>How accurate are the restoration times?</summary><p>They come straight from PG&amp;E's feed and can change or slip. We show them as given and flag when an estimate has already passed.</p></details>
+    <details><summary>Which areas are covered?</summary><p>PG&amp;E territory in Northern and Central California. If you enter a ZIP served by a different utility, we will tell you.</p></details>
+    <details><summary>Do you track me?</summary><p>No analytics, no tracking cookies, no ads. See the <a href="/privacy">Privacy Policy</a>.</p></details>
+  </div></section>
+</main>
+
+<footer><div class="wrap footer-in">
+  <span>OutageWatch</span>
+  <div class="footer-links">
+    <a href="/statewide">Statewide map</a>
+    <a href="/privacy">Privacy</a>
+    <a href="/terms">Terms</a>
+    <a href="https://github.com/nicglazkov/outagewatch" target="_blank" rel="noopener">GitHub</a>
+  </div>
+  <p class="disclaimer" style="flex-basis:100%">Not affiliated with PG&amp;E. Data comes from PG&amp;E's public outage map and can lag. For emergencies call 911; report downed lines to PG&amp;E at 1-800-743-5000.</p>
+</div></footer>
+
+<div class="modal-back" id="modal-back">
+  <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"
+        integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
+<script src="/static/js/firebase-config.js"></script>
+<script src="/static/js/app.js"></script>
 </body>
 </html>

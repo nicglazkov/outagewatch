@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms of Use - OutageWatch</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --surface: #f6f6f9;
+    --text: #1a1a2e;
+    --muted: #55556b;
+    --accent: #ffc94a;
+    --border: rgba(26, 26, 46, 0.16);
+    --link: #2a2a55;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a2e;
+      --surface: #23233f;
+      --text: #ececf4;
+      --muted: #a6a6c2;
+      --accent: #ffc94a;
+      --border: rgba(255, 255, 255, 0.16);
+      --link: #ffc94a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 20px 64px;
+    line-height: 1.7;
+    background: var(--bg);
+    color: var(--text);
+  }
+  a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: var(--accent); }
+  header {
+    display: flex;
+    align-items: center;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .home {
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .home:hover { color: var(--accent); }
+  h1 {
+    font-size: 1.75rem;
+    line-height: 1.25;
+    margin: 8px 0 6px;
+  }
+  h1::after {
+    content: "";
+    display: block;
+    width: 56px;
+    height: 4px;
+    margin-top: 12px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+  h2 {
+    font-size: 1.2rem;
+    margin: 36px 0 8px;
+  }
+  .updated {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0 0 24px;
+  }
+  p, li { font-size: 1rem; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  strong { font-weight: 600; }
+  .callout {
+    background: var(--surface);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 20px 0;
+  }
+  .callout p { margin: 6px 0; }
+  footer {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  footer nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin-bottom: 10px;
+  }
+  footer a { color: var(--muted); }
+  footer a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <a class="home" href="/">&larr; OutageWatch</a>
+</header>
+
+<main>
+  <h1>Terms of Use</h1>
+  <p class="updated">Last updated: July 2026</p>
+
+  <p>
+    Please read these terms before using OutageWatch. By using the app, the
+    website, or the API, you agree to them. If you do not agree, do not use them.
+  </p>
+
+  <h2>What OutageWatch is</h2>
+  <p>
+    OutageWatch is a free, informational service that shows power-outage status
+    and sends alerts based on <strong>PG&amp;E's publicly available outage
+    data</strong> for its Northern and Central California service territory.
+  </p>
+
+  <h2>Not affiliated with PG&amp;E</h2>
+  <p>
+    OutageWatch is an independent project. It is <strong>not affiliated with,
+    endorsed by, sponsored by, or operated by PG&amp;E</strong>. "PG&amp;E" and
+    "Pacific Gas and Electric" are trademarks of their owner and are used here only
+    to describe the source of the data.
+  </p>
+
+  <h2>No warranty; the data can be wrong or delayed</h2>
+  <p>
+    The service and all information in it are provided <strong>"as is" and "as
+    available," without warranties of any kind</strong>. Outage locations, causes,
+    and estimated restoration times come from PG&amp;E's feed, which can be
+    <strong>inaccurate, incomplete, delayed, or unavailable</strong>. We do not
+    guarantee that:
+  </p>
+  <ul>
+    <li>outage information is correct or current;</li>
+    <li>a notification will be sent, delivered, or delivered on time; or</li>
+    <li>the service or its servers will be available without interruption.</li>
+  </ul>
+
+  <h2>Web service</h2>
+  <p>
+    The website and its API are provided <strong>as is</strong>, on the same terms
+    and with the same safety disclaimer as the app. OutageWatch is not affiliated
+    with PG&amp;E, the outage data can lag or be incomplete, and you should not
+    rely on it for emergencies. In any emergency, call <strong>911</strong>.
+  </p>
+
+  <h2>Not for emergencies</h2>
+  <div class="callout">
+    <p><strong>Do not rely on OutageWatch for safety-critical or emergency decisions.</strong></p>
+    <p>In any emergency, call <strong>911</strong>.</p>
+    <p>Report a downed power line, a gas leak, or another PG&amp;E emergency to PG&amp;E at <strong>1-800-743-5000</strong>.</p>
+    <p>Never touch or approach a downed line; assume every line is live.</p>
+  </div>
+
+  <h2>Limitation of liability</h2>
+  <p>
+    To the maximum extent permitted by law, OutageWatch and its creator are
+    <strong>not liable for any direct, indirect, incidental, consequential, or
+    other damages</strong> arising out of or related to your use of, or inability
+    to use, the service or its data, or any reliance on information it provides.
+    Your only remedy if you are dissatisfied is to stop using it.
+  </p>
+
+  <h2>Acceptable use</h2>
+  <p>
+    Use OutageWatch for personal, non-commercial purposes. Do not misuse the
+    service, including by attempting to scrape or overload it, reverse engineer it,
+    circumvent rate limits, or use it to harm others.
+  </p>
+
+  <h2>Availability and changes</h2>
+  <p>
+    OutageWatch is provided free of charge. We may change, suspend, or discontinue
+    it, or any part of it, at any time and without notice. We may also update these
+    terms; we will change the "Last updated" date above, and continued use means
+    you accept the revised terms.
+  </p>
+
+  <h2>Governing law</h2>
+  <p>
+    These terms are governed by the laws of the State of California, without regard
+    to its conflict-of-laws rules.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Questions about these terms? Open an issue at
+    <a href="https://github.com/nicglazkov/outagewatch/issues">github.com/nicglazkov/outagewatch/issues</a>.
+  </p>
+</main>
+
+<footer>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/privacy">Privacy</a>
+    <a href="/terms">Terms</a>
+    <a href="https://github.com/nicglazkov/outagewatch">Source on GitHub</a>
+  </nav>
+  <div>Not affiliated with PG&amp;E.</div>
+</footer>
+</body>
+</html>

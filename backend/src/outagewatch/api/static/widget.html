@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OutageWatch outage widget</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --navy: #1a1a2e;
+    --amber: #ffc94a;
+    --bg: #ffffff;
+    --fg: #1a1a2e;
+    --muted: #5c5c6b;
+    --line: rgba(26,26,46,0.14);
+    --card: rgba(26,26,46,0.03);
+    --ok: #2e9e44;
+    --bad: #d64545;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14141f;
+      --fg: #f0f0f5;
+      --muted: #a2a2b2;
+      --line: rgba(255,255,255,0.16);
+      --card: rgba(255,255,255,0.05);
+      --ok: #5cd47a;
+      --bad: #ff7a7a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.4;
+    padding: 10px;
+  }
+  .widget {
+    max-width: 360px;
+    margin: 0 auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 14px 10px;
+    background: var(--bg);
+  }
+  .top {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .brand {
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.2px;
+  }
+  .brand .dot { color: var(--amber); }
+  .status {
+    font-size: 1.02rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+  }
+  .status.ok { color: var(--ok); }
+  .status.bad { color: var(--bad); }
+  .status.muted { color: var(--muted); font-weight: 600; }
+  .row {
+    border-top: 1px solid var(--line);
+    padding: 8px 0;
+  }
+  .row .title {
+    font-weight: 600;
+    font-size: 0.92rem;
+  }
+  .row .title.psps { color: var(--amber); }
+  .row .meta,
+  .row .eta {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .more {
+    font-size: 0.8rem;
+    color: var(--muted);
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .updated {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+  .foot {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .foot a {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .foot a:hover { text-decoration: underline; }
+  .foot .note { display: block; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="widget" id="widget">
+  <div class="top">
+    <span class="brand"><span class="dot">&#9679;</span> OutageWatch</span>
+  </div>
+  <div id="body">
+    <p class="status muted">Loading outage status</p>
+  </div>
+  <p class="updated" id="updated"></p>
+  <div class="foot">
+    <a href="https://outagewatch-api-7bi2fdpqrq-uw.a.run.app/" target="_blank" rel="noopener">Powered by OutageWatch</a>
+    <span class="note">Not affiliated with PG&amp;E.</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  var API = "https://outagewatch-api-7bi2fdpqrq-uw.a.run.app";
+  var bodyEl = document.getElementById("body");
+  var updatedEl = document.getElementById("updated");
+
+  function getZip() {
+    var params = new URLSearchParams(window.location.search);
+    var zip = (params.get("zip") || "").trim();
+    return /^[0-9]{5}$/.test(zip) ? zip : null;
+  }
+
+  function clear(el) {
+    while (el.firstChild) { el.removeChild(el.firstChild); }
+  }
+
+  function status(text, kind) {
+    var p = document.createElement("p");
+    p.className = "status" + (kind ? " " + kind : "");
+    p.textContent = text;
+    return p;
+  }
+
+  function etaText(iso) {
+    if (!iso) { return "No estimate yet"; }
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) { return "No estimate yet"; }
+    return "Restoration by " + d.toLocaleString("en-US", {
+      timeZone: "America/Los_Angeles",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  }
+
+  function outageRow(o) {
+    var row = document.createElement("div");
+    row.className = "row";
+
+    var title = document.createElement("div");
+    var isPsps = !!o.is_psps;
+    title.className = "title" + (isPsps ? " psps" : "");
+    var label = isPsps ? "PSPS shutoff" : "Power outage";
+    // city is feed data, keep it out of innerHTML
+    title.textContent = o.city ? label + ", " + o.city : label;
+    row.appendChild(title);
+
+    var metaParts = [];
+    if (o.cause) { metaParts.push(String(o.cause)); }
+    if (o.est_customers) {
+      var n = Number(o.est_customers);
+      if (!isNaN(n) && n > 0) {
+        metaParts.push(n.toLocaleString("en-US") + " customers");
+      }
+    }
+    if (metaParts.length) {
+      var meta = document.createElement("div");
+      meta.className = "meta";
+      // cause is third-party feed text, textContent escapes it
+      meta.textContent = metaParts.join(" · ");
+      row.appendChild(meta);
+    }
+
+    var eta = document.createElement("div");
+    eta.className = "eta";
+    eta.textContent = etaText(o.eta);
+    row.appendChild(eta);
+
+    return row;
+  }
+
+  function renderOutages(zip, outages) {
+    clear(bodyEl);
+
+    if (!outages.length) {
+      bodyEl.appendChild(status("No outages reported near " + zip, "ok"));
+      return;
+    }
+
+    var count = outages.length;
+    var head = count === 1 ? "1 outage near " + zip : count + " outages near " + zip;
+    bodyEl.appendChild(status(head, "bad"));
+
+    var shown = outages.slice(0, 3);
+    for (var i = 0; i < shown.length; i++) {
+      bodyEl.appendChild(outageRow(shown[i]));
+    }
+
+    if (count > shown.length) {
+      var more = document.createElement("div");
+      more.className = "more";
+      more.textContent = "and " + (count - shown.length) + " more in this area";
+      bodyEl.appendChild(more);
+    }
+  }
+
+  function setUpdated() {
+    var t = new Date().toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit"
+    });
+    updatedEl.textContent = "Updated " + t;
+  }
+
+  function showHint() {
+    clear(bodyEl);
+    bodyEl.appendChild(status("Set a ZIP code to see outages", "muted"));
+    updatedEl.textContent = "";
+  }
+
+  function load() {
+    var zip = getZip();
+    if (!zip) { showHint(); return; }
+
+    fetch(API + "/v1/outages?zip=" + encodeURIComponent(zip))
+      .then(function (r) {
+        if (r.status === 404) { return { notFound: true }; }
+        if (!r.ok) { throw new Error("bad status " + r.status); }
+        return r.json();
+      })
+      .then(function (data) {
+        if (data && data.notFound) {
+          clear(bodyEl);
+          bodyEl.appendChild(status(zip + " is not a California ZIP we cover", "muted"));
+          setUpdated();
+          return;
+        }
+        renderOutages(zip, Array.isArray(data) ? data : []);
+        setUpdated();
+      })
+      .catch(function () {
+        clear(bodyEl);
+        bodyEl.appendChild(status("Couldn't load outage status", "muted"));
+        setUpdated();
+      });
+  }
+
+  load();
+  setInterval(load, 5 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
