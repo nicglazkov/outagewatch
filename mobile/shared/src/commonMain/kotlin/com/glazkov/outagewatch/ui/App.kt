@@ -1,14 +1,21 @@
 package com.glazkov.outagewatch.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import com.glazkov.outagewatch.update.AppUpdate
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.glazkov.outagewatch.ui.theme.CompassTheme
 import androidx.navigation.compose.NavHost
@@ -85,6 +92,14 @@ fun App() {
     CompassTheme {
     MaterialTheme(colorScheme = colors) {
         val nav = rememberNavController()
+
+        // Once per launch, ask GitHub for a newer release. The dialog is shown
+        // once and only once per new version (tracked in settings).
+        var update by remember { mutableStateOf<AppUpdate.Available?>(null) }
+        LaunchedEffect(Unit) {
+            update = AppUpdate.check(AppInfo.version, AppGraph.api)
+        }
+
         // A notification tap sets PendingOutage.id; open that outage, then clear it.
         val pendingOutage by PendingOutage.id.collectAsState()
         LaunchedEffect(pendingOutage) {
@@ -126,6 +141,23 @@ fun App() {
                 val route = entry.toRoute<DetailRoute>()
                 OutageDetailScreen(outageId = route.outageId, onBack = { nav.popBackStack() })
             }
+        }
+
+        update?.let { available ->
+            AlertDialog(
+                onDismissRequest = { update = null },
+                title = { Text("Update available") },
+                text = { Text("OutageWatch ${available.version} is available. You have ${AppInfo.version}.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        ExternalLinks.open(available.url)
+                        update = null
+                    }) { Text("Update") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { update = null }) { Text("Not now") }
+                },
+            )
         }
     }
     }
