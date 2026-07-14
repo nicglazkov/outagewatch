@@ -1,6 +1,8 @@
 package com.glazkov.outagewatch.ui.map
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.util.Log
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
@@ -35,7 +37,10 @@ actual fun OutageMapView(
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            WebView.setWebContentsDebuggingEnabled(true)
+            // Only expose the WebView to chrome://inspect on a debuggable build,
+            // never in a shipped release.
+            val debuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            WebView.setWebContentsDebuggingEnabled(debuggable)
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 webChromeClient = object : WebChromeClient() {
@@ -58,7 +63,19 @@ actual fun OutageMapView(
                             url.lastPathSegment?.let(onOutageTap)
                             return true
                         }
-                        return false
+                        // The map page never navigates its own main frame. Open
+                        // genuine web links (e.g. map attribution) in the external
+                        // browser and block everything else, so injected or
+                        // third-party content can't repoint the WebView itself.
+                        if (url.scheme == "http" || url.scheme == "https") {
+                            runCatching {
+                                view.context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, url)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            }
+                        }
+                        return true
                     }
                 }
             }

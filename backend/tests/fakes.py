@@ -25,8 +25,10 @@ class FakeStateStore:
     def __init__(self):
         self.snapshot: Snapshot | None = None
         self.version: str | None = None
+        self.load_calls = 0  # how many times the "GCS" blob was actually read
 
     async def load(self) -> Snapshot | None:
+        self.load_calls += 1
         return self.snapshot
 
     async def save(self, snapshot: Snapshot, fetched_at: datetime) -> None:
@@ -91,6 +93,7 @@ class FakeSlo:
     def __init__(self, latencies: list[float] | None = None):
         self.events: list[dict] = []
         self.latencies = latencies or []
+        self.read_calls = 0  # how many times recent_latencies hit the "store"
 
     def log_dispatch(self, outage_id, kind, feed_updated_at, fetched_at, sent_count) -> None:
         self.events.append(
@@ -98,4 +101,5 @@ class FakeSlo:
         )
 
     def recent_latencies(self, hours: int = 24) -> list[float]:
+        self.read_calls += 1
         return self.latencies

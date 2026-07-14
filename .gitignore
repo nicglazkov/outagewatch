@@ -10,7 +10,12 @@ docs-private/
 *.local.json
 credentials*.json
 service-account*.json
+*serviceAccount*.json
+GoogleService-Info.plist
 google-services.json
+*.pem
+*.p12
+*.key
 
 # Python
 __pycache__/

@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 import uuid
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -43,6 +44,28 @@ _DELETE_LIMIT = RateLimiter(max_requests=30, window_seconds=60)
 # A device never legitimately watches this many areas; caps runaway Firestore
 # growth that would slow the poller (which loads every subscription each cycle).
 MAX_SUBS_PER_TOKEN = 25
+
+# /v1/slo runs a Firestore query per call; cache the computed summary briefly so
+# a flood of unauthenticated hits can't amplify into unbounded Firestore reads.
+# The data only moves once per poll cycle (~5 min), so a short TTL loses nothing.
+_SLO_TTL = 60.0
+_slo_cache: tuple[float, dict[str, Any]] | None = None
+
+# The statewide snapshot is otherwise re-downloaded from GCS on every read; cache
+# it briefly so unauthenticated reads can't amplify into a GCS download per call.
+# The poller (separate service) always loads fresh state, so only reads see this.
+_SNAPSHOT_TTL = 30.0
+_snapshot_cache: tuple[float, dict[str, Item]] | None = None
+
+
+async def _load_snapshot(deps: Deps) -> dict[str, Item]:
+    global _snapshot_cache
+    now = time.monotonic()
+    if _snapshot_cache is not None and now - _snapshot_cache[0] < _SNAPSHOT_TTL:
+        return _snapshot_cache[1]
+    snapshot = await deps.state.load() or {}
+    _snapshot_cache = (now, snapshot)
+    return snapshot
 
 
 def _client_ip(request: Request) -> str:
@@ -185,28 +208,37 @@ async def status_page() -> FileResponse:
 
 
 @app.get("/v1/slo")
-async def slo_summary(deps: Deps = Depends(get_deps)) -> dict[str, Any]:
+async def slo_summary(request: Request, deps: Deps = Depends(get_deps)) -> dict[str, Any]:
     """Alert-latency SLO: feed change observed to push sent, last 24h.
 
     Target: under 6 minutes (360s). Latency here is measured from the feed's
     own LAST_UPDATE stamp, so it includes PG&E's publish delay plus our
     5-minute poll interval.
     """
+    _rate_limit(_READ_LIMIT, request)
+    global _slo_cache
+    now = time.monotonic()
+    if _slo_cache is not None and now - _slo_cache[0] < _SLO_TTL:
+        return _slo_cache[1]
+
     latencies = sorted(deps.slo.recent_latencies(hours=24))
     if not latencies:
-        return {"count": 0, "target_seconds": 360}
+        summary: dict[str, Any] = {"count": 0, "target_seconds": 360}
+    else:
 
-    def pct(p: float) -> float:
-        return latencies[min(len(latencies) - 1, int(p * len(latencies)))]
+        def pct(p: float) -> float:
+            return latencies[min(len(latencies) - 1, int(p * len(latencies)))]
 
-    return {
-        "count": len(latencies),
-        "target_seconds": 360,
-        "p50_seconds": round(pct(0.5), 1),
-        "p95_seconds": round(pct(0.95), 1),
-        "max_seconds": round(latencies[-1], 1),
-        "within_target": sum(1 for v in latencies if v <= 360),
-    }
+        summary = {
+            "count": len(latencies),
+            "target_seconds": 360,
+            "p50_seconds": round(pct(0.5), 1),
+            "p95_seconds": round(pct(0.95), 1),
+            "max_seconds": round(latencies[-1], 1),
+            "within_target": sum(1 for v in latencies if v <= 360),
+        }
+    _slo_cache = (now, summary)
+    return summary
 
 
 @app.get("/v1/outages", response_model=list[OutageOut])
@@ -227,7 +259,7 @@ async def list_outages(
     # with include_geometry is multi-MB and re-downloads the whole state per call).
     if not has_point and not zip_code:
         return []
-    snapshot = await deps.state.load() or {}
+    snapshot = await _load_snapshot(deps)
     items = list(snapshot.values())
     if has_point:
         probe = MatcherSub(id="q", token="q", lat=lat, lon=lon, radius_km=radius_km)
@@ -253,7 +285,7 @@ async def get_outage(
     request: Request, outage_id: str, deps: Deps = Depends(get_deps)
 ) -> dict[str, Any]:
     _rate_limit(_READ_LIMIT, request)
-    snapshot = await deps.state.load() or {}
+    snapshot = await _load_snapshot(deps)
     item = snapshot.get(outage_id)
     if item is None:
         raise HTTPException(status_code=404, detail="outage not found or restored")
@@ -272,7 +304,7 @@ async def explain_outage_endpoint(
     from outagewatch.explain import cache_key, explain_outage, fallback_explanation
 
     _rate_limit(_EXPLAIN_LIMIT, request)
-    snapshot = await deps.state.load() or {}
+    snapshot = await _load_snapshot(deps)
     item = snapshot.get(outage_id)
     if item is None:
         raise HTTPException(status_code=404, detail="outage not found or restored")
@@ -356,9 +388,10 @@ async def geocode_autocomplete(
 
 
 @app.get("/v1/zips/{zip_code}")
-async def get_zip(zip_code: str) -> dict[str, Any]:
+async def get_zip(request: Request, zip_code: str) -> dict[str, Any]:
     from outagewatch.territory import non_pge_utility
 
+    _rate_limit(_READ_LIMIT, request)
     area = zipcodes.lookup(zip_code)
     if area is None:
         raise HTTPException(status_code=404, detail="unknown California ZIP")
@@ -380,11 +413,22 @@ def _is_sub_id(sub_id: str) -> bool:
 
 @app.delete("/v1/subscriptions/{sub_id}", status_code=204)
 async def delete_subscription(
-    request: Request, sub_id: str, deps: Deps = Depends(get_deps)
+    request: Request,
+    sub_id: str,
+    deps: Deps = Depends(get_deps),
+    x_device_token: str | None = Header(default=None),
 ) -> None:
     _rate_limit(_DELETE_LIMIT, request)
     # Reject malformed ids before they reach Firestore (a reserved id would 500).
     if not _is_sub_id(sub_id):
+        raise HTTPException(status_code=404, detail="subscription not found")
+    # Ownership: only delete a subscription that belongs to the caller's own
+    # device token. Without the owning token, behave as if it doesn't exist so
+    # a guessed id leaks nothing about whether it's real.
+    owned = x_device_token and any(
+        s.id == sub_id for s in deps.subs.list_for_device(x_device_token)
+    )
+    if not owned:
         raise HTTPException(status_code=404, detail="subscription not found")
     deps.subs.delete(sub_id)
 

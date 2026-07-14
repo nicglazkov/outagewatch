@@ -20,6 +20,8 @@ jobs:
         run: uv run ruff check .
       - name: Tests
         run: uv run pytest -q
+      - name: Audit dependencies for known CVEs
+        run: uv run --with pip-audit pip-audit
 
   android:
     runs-on: ubuntu-latest

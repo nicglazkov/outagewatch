@@ -12,7 +12,12 @@ set -euo pipefail
 export CLOUDSDK_ACTIVE_CONFIG_NAME=outagewatch
 PROJECT=outagewatch
 REGION=us-west1
+# The poller runs as the fuller runtime SA (Firestore + FCM + GCS write). The
+# public API runs as a least-privilege SA: Firestore + GCS read-only + the
+# Anthropic secret, but NO FCM-admin and NO GCS write, so a compromise of the
+# internet-facing service can't push to users or rewrite state.
 SA="outagewatch-runtime@${PROJECT}.iam.gserviceaccount.com"
+API_SA="outagewatch-api@${PROJECT}.iam.gserviceaccount.com"
 SCHEDULER_SA="outagewatch-scheduler@${PROJECT}.iam.gserviceaccount.com"
 
 cd "$(dirname "$0")/.."
@@ -31,7 +36,7 @@ gcloud run deploy outagewatch-poller \
 
 gcloud run deploy outagewatch-api \
   --source . --project "$PROJECT" --region "$REGION" \
-  --service-account "$SA" \
+  --service-account "$API_SA" \
   --allow-unauthenticated \
   --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT},DATA_BUCKET=outagewatch-data,ENABLE_POLL=0" \
   --set-secrets "$SECRETS" \
