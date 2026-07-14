@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Statewide outage map - OutageWatch</title>
+<meta name="description" content="Live map of every current PG&E power outage across Northern and Central California.">
+<meta name="theme-color" content="#1a1a2e">
+<link rel="icon" href="/static/icons/icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+      integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous">
+<style>
+  :root { color-scheme: light dark; --amber:#ffc94a; --navy:#1a1a2e; --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: var(--font); }
+  #map { position: absolute; inset: 0; }
+  .bar {
+    position: absolute; top: 12px; left: 12px; right: 12px; z-index: 10; display: flex; gap: 10px; align-items: center;
+    background: color-mix(in srgb, Canvas 88%, transparent); backdrop-filter: blur(8px);
+    border: 1px solid rgba(128,128,128,0.3); border-radius: 12px; padding: 10px 14px; max-width: 520px;
+  }
+  .bar a.home { display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit; font-weight: 800; }
+  .bar a.home img { width: 24px; height: 24px; border-radius: 6px; }
+  .count { margin-left: auto; font-weight: 700; }
+  .count small { display: block; font-weight: 500; opacity: 0.7; font-size: 0.75rem; }
+  .legend {
+    position: absolute; bottom: 16px; left: 12px; z-index: 10; font-size: 0.8rem;
+    background: color-mix(in srgb, Canvas 88%, transparent); border: 1px solid rgba(128,128,128,0.3);
+    border-radius: 10px; padding: 8px 12px;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; margin-right: 12px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="bar">
+  <a class="home" href="/"><img src="/static/icons/icon-192.png" alt=""> OutageWatch</a>
+  <div class="count" id="count"><span class="spin"></span> Loading<small>statewide outages</small></div>
+</div>
+<div class="legend">
+  <span><i class="dot" style="background:#e65100"></i> Outage</span>
+  <span><i class="dot" style="background:#c62828"></i> PSPS shutoff</span>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"
+        integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
+<script>
+(function () {
+  var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  var map = new maplibregl.Map({
+    container: "map",
+    style: dark ? "https://tiles.openfreemap.org/styles/dark" : "https://tiles.openfreemap.org/styles/positron",
+    center: [-121.4, 38.6], zoom: 5.6, attributionControl: false
+  });
+  map.addControl(new maplibregl.AttributionControl({ compact: true }));
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+
+  function esc(s) { var d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+  function fmtEta(iso) {
+    if (!iso) return "No estimate yet";
+    var d = new Date(iso); if (isNaN(d)) return "No estimate yet";
+    return d.toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  function draw(list) {
+    document.getElementById("count").innerHTML = list.length + " outages<small>across PG&E territory</small>";
+    var polys = [], pts = [];
+    list.forEach(function (o) {
+      var color = o.is_psps ? "#c62828" : "#e65100";
+      if (o.geometry) polys.push({ type: "Feature", properties: { color: color }, geometry: o.geometry });
+      if (o.lat != null && o.lon != null) pts.push({ type: "Feature", properties: { color: color, id: o.id, label: (o.is_psps ? "PSPS shutoff" : "Power outage"), cause: o.cause || "", cust: o.est_customers, eta: fmtEta(o.eta) }, geometry: { type: "Point", coordinates: [o.lon, o.lat] } });
+    });
+    if (map.getSource("p")) { map.getSource("p").setData({ type: "FeatureCollection", features: polys }); map.getSource("pt").setData({ type: "FeatureCollection", features: pts }); return; }
+    map.addSource("p", { type: "geojson", data: { type: "FeatureCollection", features: polys } });
+    map.addLayer({ id: "pf", type: "fill", source: "p", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.35 } });
+    map.addLayer({ id: "pl", type: "line", source: "p", paint: { "line-color": ["get", "color"], "line-width": 1.5 } });
+    map.addSource("pt", { type: "geojson", data: { type: "FeatureCollection", features: pts } });
+    map.addLayer({ id: "ptc", type: "circle", source: "pt", paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 3, 12, 8], "circle-color": ["get", "color"], "circle-opacity": 0.75, "circle-stroke-width": 1, "circle-stroke-color": "#fff" } });
+    map.on("click", "ptc", function (e) {
+      var p = e.features[0].properties;
+      new maplibregl.Popup({ maxWidth: "240px" }).setLngLat(e.features[0].geometry.coordinates)
+        .setHTML("<b>" + esc(p.label) + "</b><br>" + esc(p.cause) + (p.cust ? "<br>" + esc(p.cust) + " customers" : "") + "<br>Restoration: " + esc(p.eta)).addTo(map);
+    });
+    map.on("mouseenter", "ptc", function () { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", "ptc", function () { map.getCanvas().style.cursor = ""; });
+  }
+
+  function refresh() {
+    fetch("/v1/statewide?include_geometry=true")
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(draw)
+      .catch(function () { document.getElementById("count").textContent = "Could not load outages"; });
+  }
+  map.on("load", function () { refresh(); setInterval(refresh, 5 * 60 * 1000); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy - OutageWatch</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --surface: #f6f6f9;
+    --text: #1a1a2e;
+    --muted: #55556b;
+    --accent: #ffc94a;
+    --border: rgba(26, 26, 46, 0.16);
+    --link: #2a2a55;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a2e;
+      --surface: #23233f;
+      --text: #ececf4;
+      --muted: #a6a6c2;
+      --accent: #ffc94a;
+      --border: rgba(255, 255, 255, 0.16);
+      --link: #ffc94a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 20px 64px;
+    line-height: 1.7;
+    background: var(--bg);
+    color: var(--text);
+  }
+  a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: var(--accent); }
+  header {
+    display: flex;
+    align-items: center;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .home {
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .home:hover { color: var(--accent); }
+  h1 {
+    font-size: 1.75rem;
+    line-height: 1.25;
+    margin: 8px 0 6px;
+  }
+  h1::after {
+    content: "";
+    display: block;
+    width: 56px;
+    height: 4px;
+    margin-top: 12px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+  h2 {
+    font-size: 1.2rem;
+    margin: 36px 0 8px;
+  }
+  .updated {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0 0 24px;
+  }
+  p, li { font-size: 1rem; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  strong { font-weight: 600; }
+  .callout {
+    background: var(--surface);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 20px 0;
+  }
+  .callout p { margin: 6px 0; }
+  footer {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  footer nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin-bottom: 10px;
+  }
+  footer a { color: var(--muted); }
+  footer a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <a class="home" href="/">&larr; OutageWatch</a>
+</header>
+
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: July 2026</p>
+
+  <p>
+    OutageWatch (the app, the website, we, us) sends power-outage alerts for
+    PG&amp;E's Northern and Central California territory. This policy explains what
+    we collect, why, and who it is shared with. OutageWatch is an independent
+    project and is <strong>not affiliated with, endorsed by, or operated by
+    PG&amp;E</strong>.
+  </p>
+  <p>
+    We built OutageWatch to collect as little as possible. There are
+    <strong>no accounts, no sign-up, and no name, email, or phone number
+    required</strong> to use it.
+  </p>
+
+  <h2>What we collect</h2>
+  <ul>
+    <li>
+      <strong>Areas you add.</strong> When you add a ZIP code, type an address,
+      or tap "use my location," we store that area (its coordinates and, for a
+      ZIP, the ZIP code) so we can watch it for outages. Addresses you type are
+      turned into coordinates ("geocoded"); the address or ZIP is sent to our
+      server to look up the location and check which utility serves it.
+    </li>
+    <li>
+      <strong>A notification token.</strong> To deliver push alerts we use a
+      messaging service that assigns your app install or browser an anonymous
+      token. We store this token with your saved areas so we can notify the right
+      device.
+    </li>
+    <li>
+      <strong>Basic request data.</strong> Like any internet service, our servers
+      briefly receive your device's IP address when you make a request. We use it
+      only to operate and protect the service (for example, rate limiting) and do
+      not build a profile from it.
+    </li>
+  </ul>
+  <p>
+    We do <strong>not</strong> collect your name, email, phone number, contacts,
+    photos, or a continuous location history.
+  </p>
+
+  <h2>Browser notifications</h2>
+  <p>
+    If you opt into web push alerts, your browser gives us a push token. We store
+    that token together with the ZIP or area you chose so we can deliver alerts to
+    you, and nothing else. We do not collect your name or email to send these
+    alerts. You can turn web notifications off at any time through your browser's
+    site settings, which revokes the token.
+  </p>
+
+  <h2>Local storage</h2>
+  <p>
+    We use your browser's localStorage to remember your last ZIP and whether you
+    dismissed a banner, so the site is a little less repetitive on your next
+    visit. That is it. There are <strong>no third-party tracking cookies, no
+    analytics, and no ads</strong>. You can clear this at any time from your
+    browser's storage settings.
+  </p>
+
+  <h2>Geolocation</h2>
+  <p>
+    If you tap "use my location," your browser shares your coordinates with the
+    site once, so we can find outages near you. Those coordinates are used in the
+    moment and are <strong>not stored on our servers</strong>.
+  </p>
+
+  <h2>How your information is used</h2>
+  <ul>
+    <li>To show outages in and near the areas you save.</li>
+    <li>
+      To send you an alert when an outage affects one of your areas, its
+      restoration estimate changes materially, power is restored, or a Public
+      Safety Power Shutoff is planned for your area.
+    </li>
+    <li>To keep the service running and prevent abuse.</li>
+  </ul>
+  <p>
+    We do <strong>not</strong> sell your information, show ads, or use third-party
+    advertising or analytics and tracking tools.
+  </p>
+
+  <h2>Who your information is shared with</h2>
+  <p>To provide the service, limited data is processed by these providers.</p>
+  <ul>
+    <li>
+      <strong>Google.</strong> Firebase Cloud Messaging delivers push
+      notifications using your anonymous token. Google Cloud (Firestore, Cloud
+      Run, Cloud Storage) hosts our servers and database.
+    </li>
+    <li>
+      <strong>Anthropic.</strong> Powers the optional plain-language "what's going
+      on?" explanation on an outage. We send only the outage's facts (cause,
+      estimated restoration, customer count, and so on). We do <strong>not</strong>
+      send your location, saved areas, or notification token.
+    </li>
+    <li>
+      <strong>Geocoding services.</strong> When you type an address or ZIP, it is
+      sent to the U.S. Census Bureau geocoder and Photon (an OpenStreetMap
+      service) to find its coordinates.
+    </li>
+    <li>
+      <strong>OpenFreeMap, OpenMapTiles, OpenStreetMap.</strong> Provide the map
+      tiles the site draws. Your approximate map view is requested from them.
+    </li>
+    <li>
+      <strong>PG&amp;E.</strong> We read PG&amp;E's public outage map to get outage
+      data. We do <strong>not</strong> send PG&amp;E any of your information.
+    </li>
+  </ul>
+
+  <h2>Data retention</h2>
+  <p>
+    Your saved areas and notification token are kept until you remove the area
+    (which deletes it from our server) or your notification token becomes invalid
+    (we prune dead tokens automatically). Uninstalling the app, or clearing your
+    browser storage, removes the data stored on your device.
+  </p>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li>Remove any saved area at any time.</li>
+    <li>Turn off notifications in your browser's site settings or your phone's system settings.</li>
+    <li>Clear your browser storage, or uninstall the app, to remove local data.</li>
+  </ul>
+
+  <h2>Security</h2>
+  <p>
+    Data is sent over encrypted connections (HTTPS) and stored on Google Cloud. No
+    system is perfectly secure, but we keep the data we hold minimal and anonymous.
+  </p>
+
+  <h2>Children</h2>
+  <p>
+    OutageWatch is not directed to children under 13, and we do not knowingly
+    collect personal information from them.
+  </p>
+
+  <h2>Changes to this policy</h2>
+  <p>
+    We may update this policy; we will change the "Last updated" date above.
+    Continued use after an update means you accept the revised policy.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Questions about this policy or your data? Open an issue at
+    <a href="https://github.com/nicglazkov/outagewatch/issues">github.com/nicglazkov/outagewatch/issues</a>.
+  </p>
+</main>
+
+<footer>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/privacy">Privacy</a>
+    <a href="/terms">Terms</a>
+    <a href="https://github.com/nicglazkov/outagewatch">Source on GitHub</a>
+  </nav>
+  <div>Not affiliated with PG&amp;E.</div>
+</footer>
+</body>
+</html>
