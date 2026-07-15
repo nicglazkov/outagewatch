@@ -278,7 +278,7 @@ private fun SuggestionList(items: List<AddressSuggestion>, onPick: (AddressSugge
                         s.title, color = c.label, fontSize = 15.sp, fontWeight = FontWeight.Medium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    val sub = if (s.servedBy != null) "${s.subtitle} · not PG&E" else s.subtitle
+                    val sub = if (s.servedBy != null) "${s.subtitle}, not PG&E" else s.subtitle
                     if (sub.isNotBlank()) {
                         Text(
                             sub, color = if (s.servedBy != null) c.outage else c.secondary,
