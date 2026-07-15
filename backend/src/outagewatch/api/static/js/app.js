@@ -102,7 +102,8 @@
     var s = acItems[i]; if (!s) return;
     $("#addr-input").value = s.title;
     hideAc();
-    state.area = { lat: s.lat, lon: s.lon, name: s.title, zip: s.zip };
+    // An exact address: alerts should fire only if an outage covers it.
+    state.area = { lat: s.lat, lon: s.lon, name: s.title, zip: s.zip, precise: true };
     checkPoint(s.lat, s.lon, s.zip);
   }
   $("#addr-form").addEventListener("submit", function (e) {
@@ -125,7 +126,7 @@
     var btn = this; btn.textContent = "Locating...";
     navigator.geolocation.getCurrentPosition(function (pos) {
       btn.textContent = "Use my current location";
-      state.area = { lat: pos.coords.latitude, lon: pos.coords.longitude, name: "Your location" };
+      state.area = { lat: pos.coords.latitude, lon: pos.coords.longitude, name: "Your location", precise: true };
       checkPoint(pos.coords.latitude, pos.coords.longitude, null);
     }, function () {
       btn.textContent = "Use my current location";
@@ -292,8 +293,14 @@
       .then(function (token) {
         if (!token) throw 0;
         var body = { token: token, platform: "web" };
-        if (state.area.zip) body.zip_code = state.area.zip;
-        else { body.lat = state.area.lat; body.lon = state.area.lon; }
+        if (state.area.precise && state.area.lat != null) {
+          // Exact address or current location: only alert when an outage covers it.
+          body.lat = state.area.lat; body.lon = state.area.lon; body.precise = true;
+        } else if (state.area.zip) {
+          body.zip_code = state.area.zip;  // ZIP area: alert on anything nearby
+        } else if (state.area.lat != null) {
+          body.lat = state.area.lat; body.lon = state.area.lon;
+        }
         return fetch(API + "/v1/subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       })
       .then(function (r) {

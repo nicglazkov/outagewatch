@@ -66,3 +66,36 @@ def test_zip_sub_does_not_match_item_without_zip():
 def test_haversine_sanity():
     # SF to Oakland is roughly 13km.
     assert 10 < haversine_km(37.7749, -122.4194, 37.8044, -122.2712) < 16
+
+
+# --- precise (exact address) matching: only inside the footprint, never nearby ---
+
+def _precise(lat, lon, zip_code=None, radius_km=5.0):
+    return Subscription(
+        id="s", token="t", lat=lat, lon=lon, zip_code=zip_code, radius_km=radius_km, precise=True
+    )
+
+
+def test_precise_address_inside_polygon_matches():
+    assert item_matches(_poly_item(), _precise(38.45, -122.71))
+
+
+def test_precise_address_nearby_but_outside_does_not_match():
+    # ~3.3km north of the square (top edge 38.46). Well within a 5km radius, but
+    # not inside the footprint: an area sub matches here, a precise one must not.
+    assert item_matches(_poly_item(), _sub(lat=38.48, lon=-122.71, radius_km=5.0))
+    assert not item_matches(_poly_item(), _precise(38.48, -122.71, radius_km=5.0))
+
+
+def test_precise_address_never_matches_on_zip():
+    item = Item(id="o", lat=38.45, lon=-122.71, geometry=SQUARE, zips=frozenset({"95404"}))
+    # Far away but shares the ZIP: area sub matches by ZIP, precise sub must not.
+    assert item_matches(item, _sub(lat=40.0, lon=-121.0, zip_code="95404"))
+    assert not item_matches(item, _precise(40.0, -121.0, zip_code="95404"))
+
+
+def test_precise_matches_point_only_outage_only_when_at_the_address():
+    item = Item(id="o", lat=38.4500, lon=-122.7100)  # no polygon footprint
+    assert item_matches(item, _precise(38.4504, -122.7100))  # ~44m, at the address
+    # ~1.1km away: even with a big radius, a precise address ignores nearby.
+    assert not item_matches(item, _precise(38.46, -122.71, radius_km=5.0))

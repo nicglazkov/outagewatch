@@ -182,6 +182,9 @@ class LocationsRepository(
                     quietStart = p.quietStart,
                     quietEnd = p.quietEnd,
                     pspsWarnings = p.pspsWarnings,
+                    // A precise address alerts only when an outage covers it; a
+                    // ZIP/region alerts on anything nearby.
+                    precise = location.precise,
                 )
             ).id
         }.getOrNull()
