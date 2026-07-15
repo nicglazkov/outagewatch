@@ -52,9 +52,13 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    /** User-triggered retry (e.g. after a "can't reach PG&E" error). */
-    fun refresh() {
-        _state.value = _state.value.copy(refreshing = true)
+    /**
+     * Re-fetch every area, keeping the current data visible while it loads.
+     * [silent] skips the pull-to-refresh indicator, for automatic refreshes
+     * (on foreground return and on the periodic tick) that should not flash.
+     */
+    fun refresh(silent: Boolean = false) {
+        if (!silent) _state.value = _state.value.copy(refreshing = true)
         viewModelScope.launch { refresh(saved) }
     }
 

@@ -23,7 +23,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -36,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.Text
+import com.glazkov.outagewatch.ui.AutoRefresh
 import com.glazkov.outagewatch.ui.formatEta
 import com.glazkov.outagewatch.ui.formatIso
 import com.glazkov.outagewatch.ui.groupedNumber
@@ -45,6 +48,7 @@ import com.glazkov.outagewatch.ui.theme.GroupedSection
 import com.glazkov.outagewatch.ui.theme.LocalCompass
 import com.glazkov.outagewatch.ui.theme.SectionHeader
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OutageDetailScreen(
     outageId: String,
@@ -53,6 +57,8 @@ fun OutageDetailScreen(
 ) {
     val c = LocalCompass.current
     val state by viewModel.state.collectAsState()
+
+    AutoRefresh { viewModel.refresh(silent = true) }
 
     Column(Modifier.fillMaxSize().background(c.background)) {
         NavBar(if (state.detail?.outage?.isPsps == true) "PSPS outage" else "Outage", onBack)
@@ -84,6 +90,11 @@ fun OutageDetailScreen(
 
             else -> {
                 val outage = state.detail?.outage ?: return
+                PullToRefreshBox(
+                    isRefreshing = state.refreshing,
+                    onRefresh = { viewModel.refresh() },
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     // Big status header.
                     Column(Modifier.padding(20.dp, 8.dp, 20.dp, 4.dp)) {
@@ -146,6 +157,7 @@ fun OutageDetailScreen(
                     )
                     Spacer(Modifier.height(24.dp))
                     Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+                }
                 }
             }
         }

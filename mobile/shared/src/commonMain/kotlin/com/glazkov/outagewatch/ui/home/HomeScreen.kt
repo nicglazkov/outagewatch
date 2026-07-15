@@ -26,7 +26,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -48,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.glazkov.outagewatch.data.SavedLocation
 import com.glazkov.outagewatch.ui.AppGraph
+import com.glazkov.outagewatch.ui.AutoRefresh
 import com.glazkov.outagewatch.ui.etaBack
 import com.glazkov.outagewatch.ui.map.OutageMapView
 import com.glazkov.outagewatch.ui.theme.Cell
@@ -61,6 +64,7 @@ private const val DISCLAIMER =
     "Not affiliated with PG&E. Data comes from PG&E's public outage map and can " +
         "lag. For emergencies call 911; report downed lines to PG&E at 1-800-743-5000."
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onAddLocation: () -> Unit,
@@ -72,6 +76,9 @@ fun HomeScreen(
     val state by viewModel.state.collectAsState()
     val dark = isSystemInDarkTheme()
     val scope = rememberCoroutineScope()
+
+    // Never show stale data: refresh on return to the app and on a steady tick.
+    AutoRefresh { viewModel.refresh(silent = true) }
 
     Box(Modifier.fillMaxSize().background(c.background)) {
         when {
@@ -127,9 +134,13 @@ fun HomeScreen(
                     }
                 }
 
+                PullToRefreshBox(
+                    isRefreshing = state.refreshing,
+                    onRefresh = { viewModel.refresh() },
+                    modifier = Modifier.fillMaxWidth().weight(1f).offset(y = (-18).dp),
+                ) {
                 Column(
-                    Modifier.fillMaxWidth().weight(1f)
-                        .offset(y = (-18).dp)
+                    Modifier.fillMaxSize()
                         .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                         .background(c.background)
                         .verticalScroll(rememberScrollState()),
@@ -169,6 +180,7 @@ fun HomeScreen(
                     }
                     GroupedFootnote(DISCLAIMER)
                     Spacer(Modifier.height(96.dp))
+                }
                 }
             }
         }
