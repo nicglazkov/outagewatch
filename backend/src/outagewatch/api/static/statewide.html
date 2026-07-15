@@ -38,8 +38,8 @@
   <div class="count" id="count"><span class="spin"></span> Loading<small>statewide outages</small></div>
 </div>
 <div class="legend">
-  <span><i class="dot" style="background:#e65100"></i> Outage</span>
-  <span><i class="dot" style="background:#c62828"></i> PSPS shutoff</span>
+  <span><i class="dot" style="background:#dd4b2e"></i> Outage</span>
+  <span><i class="dot" style="background:#e0913a"></i> PSPS shutoff</span>
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"
@@ -66,7 +66,7 @@
     document.getElementById("count").innerHTML = list.length + " outages<small>across PG&E territory</small>";
     var polys = [], pts = [];
     list.forEach(function (o) {
-      var color = o.is_psps ? "#c62828" : "#e65100";
+      var color = o.is_psps ? "#e0913a" : "#dd4b2e";
       if (o.geometry) polys.push({ type: "Feature", properties: { color: color }, geometry: o.geometry });
       if (o.lat != null && o.lon != null) pts.push({ type: "Feature", properties: { color: color, id: o.id, label: (o.is_psps ? "PSPS shutoff" : "Power outage"), cause: o.cause || "", cust: o.est_customers, eta: fmtEta(o.eta) }, geometry: { type: "Point", coordinates: [o.lon, o.lat] } });
     });
