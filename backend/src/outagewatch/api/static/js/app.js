@@ -3,7 +3,12 @@
   "use strict";
   var API = "";
   var $ = function (s) { return document.querySelector(s); };
-  var state = { area: null, outages: [], center: null, map: null, timer: null, lastFetch: null };
+  var state = { area: null, outages: [], center: null, territory: null, map: null, mapReady: false, timer: null, lastFetch: null };
+
+  // Map colors read on both light (positron) and dark tiles.
+  var C_OUT = "#dd4b2e", C_PSPS = "#e0913a", C_ME = "#2b5fd0";
+  // PG&E territory overview, shown before you search so the panel is never empty.
+  var HOME = { center: [-121.7, 38.85], zoom: 5.6 };
 
   // ---------- helpers ----------
   function el(tag, cls, text) {
@@ -12,6 +17,7 @@
     if (text != null) e.textContent = text;
     return e;
   }
+  function empty() { return { type: "FeatureCollection", features: [] }; }
   function fmtEta(iso) {
     if (!iso) return "No restoration estimate yet";
     var d = new Date(iso);
@@ -53,10 +59,16 @@
     setLoading();
     save("ow_last", JSON.stringify({ zip: zip }));
     state.area = { zip: zip };
-    // territory note + outages in parallel
+    state.center = null;
+    state.territory = null;
+    // The centroid and the outages load independently; whichever lands first,
+    // syncMap() reconciles the camera and overlays, so the map never depends on
+    // the order they resolve (the old blank-map race).
     fetch(API + "/v1/zips/" + zip).then(function (r) { return r.ok ? r.json() : null; }).then(function (info) {
       state.center = info ? { lat: info.lat, lon: info.lon } : null;
       state.territory = info;
+      syncMap();
+      renderTerritoryNotice();
     }).catch(function () {});
     fetch(API + "/v1/outages?zip=" + zip)
       .then(function (r) {
@@ -137,6 +149,8 @@
   function checkPoint(lat, lon, zip) {
     setLoading();
     state.center = { lat: lat, lon: lon };
+    state.territory = null;
+    syncMap();
     save("ow_last", JSON.stringify({ lat: lat, lon: lon, name: state.area && state.area.name }));
     fetch(API + "/v1/outages?lat=" + lat + "&lon=" + lon + "&radius_km=8&include_geometry=true")
       .then(function (r) { if (!r.ok) throw 0; return r.json(); })
@@ -154,7 +168,23 @@
     return (state.area && (state.area.name || (state.area.zip ? "ZIP " + state.area.zip : ""))) || "your area";
   }
   function setLoading() { setStatus([{ t: "Checking..." }], ""); $("#result").textContent = ""; }
-  function showMsg(m) { setStatus([{ t: "Is your power out?" }], ""); $("#result").textContent = ""; $("#result").appendChild(el("div", "notice", m)); clearMap(); }
+  function showMsg(m) {
+    setStatus([{ t: "Is your power out?" }], "");
+    $("#result").textContent = "";
+    $("#result").appendChild(el("div", "notice", m));
+    state.outages = [];
+    syncMap();
+  }
+
+  function renderTerritoryNotice() {
+    var r = $("#result");
+    var ex = r.querySelector(".notice.territory");
+    if (ex) ex.remove();
+    if (state.territory && state.territory.pge === false) {
+      var n = el("div", "notice territory", "This ZIP is served by " + (state.territory.served_by || "another utility") + ", not PG&E. Outage data may be limited.");
+      r.insertBefore(n, r.firstChild);
+    }
+  }
 
   function render(list) {
     state.outages = list || [];
@@ -170,9 +200,6 @@
     }
 
     var r = $("#result"); r.textContent = "";
-    if (state.territory && state.territory.pge === false) {
-      r.appendChild(el("div", "notice", "This ZIP is served by " + (state.territory.served_by || "another utility") + ", not PG&E. Outage data may be limited."));
-    }
     if (out) {
       var box = el("div", "outages");
       box.appendChild(el("h2", null, out === 1 ? "The outage" : "The outages"));
@@ -194,42 +221,57 @@
       r.appendChild(box);
       r.appendChild(el("p", "freshness", "Updated " + ago(state.lastFetch) + ". Data from PG&E, can lag."));
     }
-    drawMap();
+    renderTerritoryNotice();
+    syncMap();
     scheduleRefresh();
   }
 
-  // ---------- Map ----------
-  function clearMap() { var m = $("#map"); if (state.map) { state.map.remove(); state.map = null; } m.innerHTML = ""; }
-  function drawMap() {
-    if (typeof maplibregl === "undefined" || !state.center) return;
-    clearMap();
+  // ---------- Map (one persistent instance) ----------
+  function initMap() {
+    if (typeof maplibregl === "undefined") return;
     var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     var map = new maplibregl.Map({
       container: "map",
       style: dark ? "https://tiles.openfreemap.org/styles/dark" : "https://tiles.openfreemap.org/styles/positron",
-      center: [state.center.lon, state.center.lat], zoom: 11, attributionControl: false
+      center: HOME.center, zoom: HOME.zoom, attributionControl: false
     });
     map.addControl(new maplibregl.AttributionControl({ compact: true }));
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     state.map = map;
     map.on("load", function () {
-      var polys = [], pts = [], bounds = new maplibregl.LngLatBounds();
-      bounds.extend([state.center.lon, state.center.lat]);
-      state.outages.forEach(function (o) {
-        var color = o.is_psps ? "#c62828" : "#e65100";
-        if (o.geometry) { polys.push({ type: "Feature", properties: { color: color }, geometry: o.geometry }); walk(o.geometry, function (x, y) { bounds.extend([x, y]); }); }
-        if (o.lat != null && o.lon != null) { pts.push({ type: "Feature", properties: { color: color, id: o.id }, geometry: { type: "Point", coordinates: [o.lon, o.lat] } }); bounds.extend([o.lon, o.lat]); }
-      });
-      map.addSource("p", { type: "geojson", data: { type: "FeatureCollection", features: polys } });
-      map.addLayer({ id: "pf", type: "fill", source: "p", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.3 } });
+      map.addSource("p", { type: "geojson", data: empty() });
+      map.addLayer({ id: "pf", type: "fill", source: "p", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.28 } });
       map.addLayer({ id: "pl", type: "line", source: "p", paint: { "line-color": ["get", "color"], "line-width": 2 } });
-      map.addSource("pt", { type: "geojson", data: { type: "FeatureCollection", features: pts } });
-      map.addLayer({ id: "ptc", type: "circle", source: "pt", paint: { "circle-radius": 7, "circle-color": ["get", "color"], "circle-opacity": 0.7, "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
-      map.addSource("me", { type: "geojson", data: { type: "Feature", geometry: { type: "Point", coordinates: [state.center.lon, state.center.lat] } } });
-      map.addLayer({ id: "mec", type: "circle", source: "me", paint: { "circle-radius": 5, "circle-color": "#1a73e8", "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
+      map.addSource("pt", { type: "geojson", data: empty() });
+      map.addLayer({ id: "ptc", type: "circle", source: "pt", paint: { "circle-radius": 7, "circle-color": ["get", "color"], "circle-opacity": 0.82, "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
+      map.addSource("me", { type: "geojson", data: empty() });
+      map.addLayer({ id: "mec", type: "circle", source: "me", paint: { "circle-radius": 6, "circle-color": C_ME, "circle-stroke-width": 3, "circle-stroke-color": "#fff" } });
       map.on("click", "ptc", function (e) { var id = e.features[0].properties.id; var o = state.outages.filter(function (x) { return x.id === id; })[0]; if (o) openDetail(o); });
-      if (state.outages.length) { try { map.fitBounds(bounds, { padding: 50, maxZoom: 14, duration: 0 }); } catch (e) {} }
+      map.on("mouseenter", "ptc", function () { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", "ptc", function () { map.getCanvas().style.cursor = ""; });
+      state.mapReady = true;
+      syncMap();
     });
+  }
+
+  function syncMap() {
+    var map = state.map;
+    if (!map || !state.mapReady) return;
+    var polys = [], pts = [], bounds = new maplibregl.LngLatBounds(), have = false;
+    if (state.center) { bounds.extend([state.center.lon, state.center.lat]); have = true; }
+    state.outages.forEach(function (o) {
+      var color = o.is_psps ? C_PSPS : C_OUT;
+      if (o.geometry) { polys.push({ type: "Feature", properties: { color: color }, geometry: o.geometry }); walk(o.geometry, function (x, y) { bounds.extend([x, y]); have = true; }); }
+      if (o.lat != null && o.lon != null) { pts.push({ type: "Feature", properties: { color: color, id: o.id }, geometry: { type: "Point", coordinates: [o.lon, o.lat] } }); bounds.extend([o.lon, o.lat]); have = true; }
+    });
+    map.getSource("p").setData({ type: "FeatureCollection", features: polys });
+    map.getSource("pt").setData({ type: "FeatureCollection", features: pts });
+    map.getSource("me").setData(state.center ? { type: "Feature", geometry: { type: "Point", coordinates: [state.center.lon, state.center.lat] } } : empty());
+    if (!state.center) { return; }
+    if (state.outages.length && have) {
+      try { map.fitBounds(bounds, { padding: 60, maxZoom: 13, duration: 600 }); return; } catch (e) {}
+    }
+    map.flyTo({ center: [state.center.lon, state.center.lat], zoom: 11, duration: 600 });
   }
   function walk(g, cb) {
     var c = g.coordinates;
@@ -331,11 +373,18 @@
 
   // ---------- Deep links + restore ----------
   function boot() {
+    initMap();
     var p = new URLSearchParams(location.search);
     if (/^\d{5}$/.test(p.get("zip") || "")) { $("#zip-input").value = p.get("zip"); checkZip(p.get("zip")); return; }
     if (p.get("lat") && p.get("lon")) { state.area = { lat: +p.get("lat"), lon: +p.get("lon") }; checkPoint(+p.get("lat"), +p.get("lon"), null); return; }
     var last = load("ow_last");
-    if (last) { try { var o = JSON.parse(last); if (o.zip) { $("#zip-input").value = o.zip; } } catch (e) {} }
+    if (last) {
+      try {
+        var o = JSON.parse(last);
+        if (o.zip) { $("#zip-input").value = o.zip; checkZip(o.zip); return; }
+        if (o.lat != null && o.lon != null) { state.area = { lat: o.lat, lon: o.lon, name: o.name }; checkPoint(o.lat, o.lon, null); return; }
+      } catch (e) {}
+    }
   }
   // register the app service worker (PWA shell) regardless of push
   if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js").catch(function () {}); }

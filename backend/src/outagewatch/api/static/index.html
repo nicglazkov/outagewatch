@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OutageWatch: is your power out? Live PG&E outage status</title>
 <meta name="description" content="Check live PG&E power outages by ZIP or address, see restoration times, and get free alerts. No account.">
-<meta name="theme-color" content="#16140f">
+<meta name="theme-color" content="#eceff4">
 <link rel="canonical" href="https://outagewatch-api-7bi2fdpqrq-uw.a.run.app/">
 <link rel="manifest" href="/static/manifest.webmanifest">
 <link rel="icon" href="/static/icons/icon-192.png">
@@ -22,7 +22,7 @@
 </head>
 <body>
 
-<header class="head"><div class="wrap head-in">
+<header class="head"><div class="head-in">
   <a class="brand" href="/"><img src="/static/icons/icon-192.png" alt=""> OutageWatch</a>
   <nav>
     <a href="/statewide">Statewide map</a>
@@ -30,48 +30,57 @@
   </nav>
 </div></header>
 
-<div id="map" role="img" aria-label="Map of outages in your area"></div>
+<section class="hero">
+  <div class="hero-in">
+    <div class="hero-main">
+      <p class="eyebrow">Live PG&amp;E outage status</p>
+      <div class="status">
+        <p class="line" id="statusline">Is your power out?</p>
+        <p class="sub" id="statussub">Check any ZIP or address across PG&amp;E's Northern and Central California territory. No account.</p>
+      </div>
 
-<main class="wrap">
-  <section class="status">
-    <p class="line" id="statusline">Is your power out?</p>
-    <p class="sub" id="statussub">Check by ZIP or address for live PG&amp;E outage status.</p>
-  </section>
+      <div class="checker">
+        <div class="modes" role="tablist" aria-label="Search by">
+          <button class="tab" data-mode="zip" role="tab" aria-selected="true">ZIP code</button>
+          <button class="tab" data-mode="address" role="tab" aria-selected="false">Address</button>
+        </div>
 
-  <section class="checker">
-    <div class="modes" role="tablist" aria-label="Search by">
-      <button class="tab" data-mode="zip" role="tab" aria-selected="true">ZIP code</button>
-      <button class="tab" data-mode="address" role="tab" aria-selected="false">Address</button>
+        <form id="zip-form" class="row">
+          <label for="zip-input" class="hidden">ZIP code</label>
+          <input id="zip-input" class="uinput" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"
+                 placeholder="ZIP code, e.g. 95404" autocomplete="postal-code" required>
+          <button class="go" type="submit">Check</button>
+        </form>
+
+        <form id="addr-form" class="row hidden">
+          <label for="addr-input" class="hidden">Street address</label>
+          <div class="ac">
+            <input id="addr-input" class="uinput" placeholder="Street address or place" autocomplete="off" aria-autocomplete="list">
+            <div id="addr-list" class="ac-list hidden" role="listbox" aria-label="Address suggestions"></div>
+          </div>
+          <button class="go" type="submit">Check</button>
+        </form>
+
+        <div class="locate"><button id="locate-btn" type="button">Use my current location</button></div>
+      </div>
+
+      <div id="result"></div>
+
+      <section class="alerts" id="alerts">
+        <strong>Get an alert when this changes</strong>
+        <p>A notification when an outage starts, when the estimate moves, and when power is back. Free, no account.</p>
+        <button id="push-btn" class="btn" type="button">Turn on browser alerts</button>
+        <p id="push-status" style="margin:10px 0 0; min-height:1em; color:var(--soft)"></p>
+      </section>
     </div>
 
-    <form id="zip-form" class="row">
-      <label for="zip-input" class="hidden">ZIP code</label>
-      <input id="zip-input" class="uinput" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"
-             placeholder="ZIP code, e.g. 95404" autocomplete="postal-code" required>
-      <button class="go" type="submit">Check</button>
-    </form>
+    <div class="hero-map">
+      <div id="map" role="img" aria-label="Map of PG&amp;E outages"></div>
+    </div>
+  </div>
+</section>
 
-    <form id="addr-form" class="row hidden">
-      <label for="addr-input" class="hidden">Street address</label>
-      <div class="ac">
-        <input id="addr-input" class="uinput" placeholder="Street address or place" autocomplete="off" aria-autocomplete="list">
-        <div id="addr-list" class="ac-list hidden" role="listbox" aria-label="Address suggestions"></div>
-      </div>
-      <button class="go" type="submit">Check</button>
-    </form>
-
-    <div class="locate"><button id="locate-btn" type="button">Use my current location</button></div>
-  </section>
-
-  <div id="result"></div>
-
-  <section class="alerts" id="alerts">
-    <strong>Get an alert when this changes</strong>
-    <p>A notification when an outage starts, when the estimate moves, and when power is back. Free, no account.</p>
-    <button id="push-btn" class="btn" type="button">Turn on browser alerts</button>
-    <p id="push-status" style="margin:10px 0 0; min-height:1em; color:var(--soft)"></p>
-  </section>
-
+<main class="wrap">
   <section class="section">
     <h2>How it works</h2>
     <div class="about">
