@@ -13,6 +13,7 @@ data class AreaOutage(val outage: Outage, val distanceKm: Double?, val inZip: Bo
 
 data class ZipState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val error: Boolean = false,
     val contextRadiusKm: Double = 0.0,
     val areaOutages: List<AreaOutage> = emptyList(),
@@ -32,13 +33,20 @@ class ZipViewModel(
         viewModelScope.launch { load() }
     }
 
-    /** Retry after a load error. */
+    /** Retry after a load error (shows the full-screen spinner). */
     fun reload() {
         _state.value = ZipState(loading = true)
         viewModelScope.launch { load() }
     }
 
-    private suspend fun load() {
+    /** Re-fetch while keeping the current list visible. [silent] hides the
+     *  pull indicator, for automatic refreshes. */
+    fun refresh(silent: Boolean = false) {
+        if (!silent) _state.value = _state.value.copy(refreshing = true)
+        viewModelScope.launch { load(isRefresh = true) }
+    }
+
+    private suspend fun load(isRefresh: Boolean = false) {
         // "Nearby" scales with the area's own size: your area plus an 8km ring,
         // so a small ZIP like Los Altos doesn't surface outages a metro away.
         val contextRadius = radiusKm + 8.0
@@ -46,9 +54,14 @@ class ZipViewModel(
             AppGraph.api.outagesNear(lat, lon, contextRadius, includeGeometry = true)
         }.getOrNull()
         if (outages == null) {
-            // Distinguish a real failure from a genuinely quiet area, so we never
-            // say "no outages" when we actually couldn't reach the feed.
-            _state.value = ZipState(loading = false, error = true, contextRadiusKm = contextRadius)
+            // On a refresh, keep the last-good list rather than blanking to an
+            // error. On the first load, distinguish a failure from a quiet area
+            // so we never say "no outages" when we could not reach the feed.
+            _state.value = if (isRefresh) {
+                _state.value.copy(loading = false, refreshing = false)
+            } else {
+                ZipState(loading = false, error = true, contextRadiusKm = contextRadius)
+            }
             return
         }
         val entries = outages

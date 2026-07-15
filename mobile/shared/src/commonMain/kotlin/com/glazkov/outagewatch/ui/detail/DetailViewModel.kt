@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 
 data class DetailState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val notFound: Boolean = false,
     val error: Boolean = false,
     val detail: OutageDetail? = null,
@@ -33,11 +34,23 @@ class DetailViewModel(private val outageId: String) : ViewModel() {
         viewModelScope.launch { load() }
     }
 
-    private suspend fun load() {
+    /** Re-fetch the outage and its explanation, keeping the current view while it
+     *  loads. [silent] hides the pull indicator, for automatic refreshes. */
+    fun refresh(silent: Boolean = false) {
+        if (!silent) _state.value = _state.value.copy(refreshing = true)
+        viewModelScope.launch { load(isRefresh = true) }
+    }
+
+    private suspend fun load(isRefresh: Boolean = false) {
         val result = runCatching { api.outageDetail(outageId) }
         if (result.isFailure) {
             // Couldn't reach the server: an error, not a confirmed restoration.
-            _state.value = DetailState(loading = false, error = true)
+            // On a refresh, keep the current view rather than blanking to error.
+            _state.value = if (isRefresh) {
+                _state.value.copy(refreshing = false)
+            } else {
+                DetailState(loading = false, error = true)
+            }
             return
         }
         val detail = result.getOrNull()

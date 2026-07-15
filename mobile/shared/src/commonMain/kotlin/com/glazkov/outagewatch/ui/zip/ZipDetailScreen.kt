@@ -31,8 +31,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.glazkov.outagewatch.ui.AutoRefresh
 import com.glazkov.outagewatch.ui.customersLine
 import com.glazkov.outagewatch.ui.detail.NavBar
 import com.glazkov.outagewatch.ui.etaBack
@@ -43,6 +46,7 @@ import com.glazkov.outagewatch.ui.theme.LocalCompass
 import com.glazkov.outagewatch.ui.theme.SectionHeader
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ZipDetailScreen(
     zip: String,
@@ -64,6 +68,8 @@ fun ZipDetailScreen(
     var focusToken by remember { mutableStateOf<String?>(null) }
     val focusNonce = remember { intArrayOf(0) }
 
+    AutoRefresh { viewModel.refresh(silent = true) }
+
     Column(Modifier.fillMaxSize().background(c.background)) {
         NavBar(label, onBack)
         if (state.loading) {
@@ -81,6 +87,11 @@ fun ZipDetailScreen(
                 focusToken = focusToken,
             )
         }
+        PullToRefreshBox(
+            isRefreshing = state.refreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.weight(1f),
+        ) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             if (state.error) {
                 Text(
@@ -138,6 +149,7 @@ fun ZipDetailScreen(
             }
             Spacer(Modifier.height(24.dp))
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
         }
     }
 }
