@@ -34,8 +34,8 @@
   // ---------- mode tabs ----------
   document.querySelectorAll(".tab").forEach(function (t) {
     t.addEventListener("click", function () {
-      document.querySelectorAll(".tab").forEach(function (x) { x.classList.remove("active"); });
-      t.classList.add("active");
+      document.querySelectorAll(".tab").forEach(function (x) { x.setAttribute("aria-selected", "false"); });
+      t.setAttribute("aria-selected", "true");
       var zip = t.dataset.mode === "zip";
       $("#zip-form").classList.toggle("hidden", !zip);
       $("#addr-form").classList.toggle("hidden", zip);
@@ -144,46 +144,56 @@
       .catch(function () { showMsg("Could not reach the outage feed. Try again shortly."); });
   }
 
-  // ---------- Render ----------
-  function setLoading() { $("#result").innerHTML = '<p class="freshness"><span class="spin"></span> Checking...</p>'; }
-  function showMsg(m) { $("#result").innerHTML = ""; $("#result").appendChild(el("div", "notice", m)); clearMap(); }
+  // ---------- Status line + render ----------
+  function setStatus(parts, sub) {
+    var l = $("#statusline"); l.textContent = "";
+    parts.forEach(function (p) { l.appendChild(el("span", p.cls || null, p.t)); });
+    $("#statussub").textContent = sub || "";
+  }
+  function areaName() {
+    return (state.area && (state.area.name || (state.area.zip ? "ZIP " + state.area.zip : ""))) || "your area";
+  }
+  function setLoading() { setStatus([{ t: "Checking..." }], ""); $("#result").textContent = ""; }
+  function showMsg(m) { setStatus([{ t: "Is your power out?" }], ""); $("#result").textContent = ""; $("#result").appendChild(el("div", "notice", m)); clearMap(); }
 
   function render(list) {
     state.outages = list || [];
     state.lastFetch = Date.now();
-    var r = $("#result");
-    r.textContent = "";
+    var name = areaName();
+    var out = state.outages.length;
+    if (out) {
+      setStatus([{ t: "Power is " }, { t: "out", cls: "out" }, { t: " near " + name + "." }],
+        out + (out === 1 ? " outage" : " outages") + " reported by PG&E.");
+    } else {
+      setStatus([{ t: "No outages", cls: "clear" }, { t: " near " + name + "." }],
+        "PG&E reports nothing in this area right now.");
+    }
 
-    var name = state.area && (state.area.name || (state.area.zip ? "ZIP " + state.area.zip : ""));
+    var r = $("#result"); r.textContent = "";
     if (state.territory && state.territory.pge === false) {
       r.appendChild(el("div", "notice", "This ZIP is served by " + (state.territory.served_by || "another utility") + ", not PG&E. Outage data may be limited."));
     }
-
-    var sum = el("div", "summary");
-    var out = state.outages.length;
-    var pill = el("div", "pill " + (out ? "out" : "clear"), out ? String(out) : "OK");
-    sum.appendChild(pill);
-    sum.appendChild(el("span", null, out ? (out + (out === 1 ? " outage" : " outages") + (name ? " near " + name : "")) : ("No outages reported" + (name ? " near " + name : ""))));
-    r.appendChild(sum);
-
-    state.outages.slice(0, 20).forEach(function (o) {
-      var card = el("div", "card");
-      var body = el("div", "body");
-      var h = el("h3", null, label(o) + (o.city ? "  -  " + o.city : ""));
-      body.appendChild(h);
-      var bits = [];
-      if (o.cause) bits.push(o.cause);
-      if (o.crew_status) bits.push(o.crew_status);
-      if (o.est_customers) bits.push(o.est_customers + (o.est_customers === 1 ? " customer" : " customers"));
-      body.appendChild(el("div", "meta", bits.join("  .  ")));
-      body.appendChild(el("div", "meta", fmtEta(o.eta)));
-      card.appendChild(body);
-      card.appendChild(el("div", "chev", ">"));
-      card.addEventListener("click", function () { openDetail(o); });
-      r.appendChild(card);
-    });
-
-    r.appendChild(el("p", "freshness", "Updated " + ago(state.lastFetch) + ". Data from PG&E, can lag."));
+    if (out) {
+      var box = el("div", "outages");
+      box.appendChild(el("h2", null, out === 1 ? "The outage" : "The outages"));
+      state.outages.slice(0, 20).forEach(function (o) {
+        var row = el("button", "orow" + (o.is_psps ? " psps" : ""));
+        row.type = "button";
+        row.appendChild(el("div", "sev"));
+        var g = el("div", "g");
+        g.appendChild(el("div", "title", label(o) + (o.city ? " in " + o.city : "")));
+        var bits = [];
+        if (o.cause) bits.push(o.cause);
+        if (o.est_customers) bits.push(o.est_customers + (o.est_customers === 1 ? " customer" : " customers"));
+        g.appendChild(el("div", "meta", bits.join(", ")));
+        g.appendChild(el("div", "meta", fmtEta(o.eta)));
+        row.appendChild(g);
+        row.addEventListener("click", function () { openDetail(o); });
+        box.appendChild(row);
+      });
+      r.appendChild(box);
+      r.appendChild(el("p", "freshness", "Updated " + ago(state.lastFetch) + ". Data from PG&E, can lag."));
+    }
     drawMap();
     scheduleRefresh();
   }
@@ -229,13 +239,18 @@
   }
 
   // ---------- Detail modal + AI explanation ----------
+  var lastFocus = null;
   function openDetail(o) {
+    lastFocus = document.activeElement;
     var m = $("#modal");
     m.textContent = "";
-    var close = el("button", "close", "×");
+    var close = el("button", "x", "×");
+    close.setAttribute("aria-label", "Close");
     close.addEventListener("click", closeModal);
     m.appendChild(close);
-    m.appendChild(el("h2", null, label(o)));
+    var h = el("h2", null, label(o));
+    h.id = "modal-title";
+    m.appendChild(h);
     m.appendChild(el("p", "eta", fmtEta(o.eta)));
     [["Cause", o.cause], ["Crew status", o.crew_status], ["Customers affected", o.est_customers], ["City", o.city]].forEach(function (kv) {
       if (kv[1] == null || kv[1] === "") return;
@@ -244,16 +259,20 @@
       row.appendChild(el("span", "v", String(kv[1])));
       m.appendChild(row);
     });
-    m.appendChild(el("div", "explain-label", "What is going on?"));
+    m.appendChild(el("div", "explain-h", "What is going on?"));
     var ex = el("div", "explain loading", "Writing a plain-language summary...");
     m.appendChild(ex);
     $("#modal-back").classList.add("open");
+    close.focus();
     fetch(API + "/v1/outages/" + encodeURIComponent(o.id) + "/explain")
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { ex.classList.remove("loading"); ex.textContent = (d && d.explanation) || "No explanation available for this outage."; })
       .catch(function () { ex.classList.remove("loading"); ex.textContent = "Could not load the explanation."; });
   }
-  function closeModal() { $("#modal-back").classList.remove("open"); }
+  function closeModal() {
+    $("#modal-back").classList.remove("open");
+    if (lastFocus && lastFocus.focus) { lastFocus.focus(); lastFocus = null; }
+  }
   $("#modal-back").addEventListener("click", function (e) { if (e.target === this) closeModal(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeModal(); });
 

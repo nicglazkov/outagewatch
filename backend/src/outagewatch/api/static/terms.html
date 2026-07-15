@@ -7,23 +7,23 @@
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #ffffff;
-    --surface: #f6f6f9;
-    --text: #1a1a2e;
-    --muted: #55556b;
-    --accent: #ffc94a;
-    --border: rgba(26, 26, 46, 0.16);
-    --link: #2a2a55;
+    --bg: #faf9f6;
+    --surface: #f0eee7;
+    --text: #23211c;
+    --muted: #6b6960;
+    --accent: #b26a17;
+    --border: #e6e3da;
+    --link: #23211c;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #1a1a2e;
-      --surface: #23233f;
-      --text: #ececf4;
-      --muted: #a6a6c2;
-      --accent: #ffc94a;
-      --border: rgba(255, 255, 255, 0.16);
-      --link: #ffc94a;
+      --bg: #16140f;
+      --surface: #201d17;
+      --text: #ece8dd;
+      --muted: #9c988a;
+      --accent: #e6b054;
+      --border: #2b2820;
+      --link: #ece8dd;
     }
   }
   * { box-sizing: border-box; }
@@ -56,15 +56,6 @@
     font-size: 1.75rem;
     line-height: 1.25;
     margin: 8px 0 6px;
-  }
-  h1::after {
-    content: "";
-    display: block;
-    width: 56px;
-    height: 4px;
-    margin-top: 12px;
-    border-radius: 2px;
-    background: var(--accent);
   }
   h2 {
     font-size: 1.2rem;
