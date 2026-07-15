@@ -45,19 +45,19 @@ analytics/tracking SDKs.
 
 To provide the service, limited data is processed by these providers:
 
-- **Google** — Firebase Cloud Messaging delivers push notifications (using your
+- **Google**: Firebase Cloud Messaging delivers push notifications (using your
   anonymous token); Google Cloud (Firestore, Cloud Run, Cloud Storage) hosts our
   servers and database.
-- **Anthropic** — powers the optional plain-language "What's going on?"
+- **Anthropic**: powers the optional plain-language "What's going on?"
   explanation on an outage. We send only the outage's facts (cause, estimated
   restoration, customer count, etc.). We do **not** send your location, saved
   areas, or device token.
-- **Geocoding services** — when you type an address or ZIP, it is sent to the
+- **Geocoding services**: when you type an address or ZIP, it is sent to the
   U.S. Census Bureau geocoder and Photon (an OpenStreetMap service) to find its
   coordinates.
-- **OpenFreeMap / OpenMapTiles / OpenStreetMap** — provide the map tiles the app
+- **OpenFreeMap / OpenMapTiles / OpenStreetMap**: provide the map tiles the app
   draws. Your approximate map view is requested from them.
-- **PG&E** — we read PG&E's public outage map to get outage data. We do **not**
+- **PG&E**: we read PG&E's public outage map to get outage data. We do **not**
   send PG&E any of your information.
 
 ## Data retention

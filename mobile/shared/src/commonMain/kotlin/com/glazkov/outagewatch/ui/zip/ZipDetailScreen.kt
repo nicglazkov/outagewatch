@@ -127,7 +127,7 @@ fun ZipDetailScreen(
                                 title = if (o.isPsps) "PSPS shutoff" else "Power outage",
                                 subtitle = listOfNotNull(
                                     o.cause, o.city, customersLine(o.estCustomers), etaBack(o.eta),
-                                ).joinToString(" · ").ifEmpty { "Details pending" },
+                                ).joinToString(", ").ifEmpty { "Details pending" },
                                 leadingEmoji = if (o.isPsps) "⚠️" else "⚡",
                                 leadingTint = c.outageTint,
                                 trailing = when {
@@ -158,9 +158,9 @@ private fun summaryLine(state: ZipState): String {
     val inZip = state.areaOutages.count { it.inZip }
     val nearby = state.areaOutages.size - inZip
     return when {
-        inZip > 0 && nearby > 0 -> "$inZip in your area · $nearby more nearby"
+        inZip > 0 && nearby > 0 -> "$inZip in your area, $nearby more nearby"
         inZip > 0 -> "$inZip outage${if (inZip > 1) "s" else ""} in your area"
-        nearby > 0 -> "Your area is clear · $nearby nearby"
+        nearby > 0 -> "Your area is clear, $nearby nearby"
         else -> "No outages in or near your area"
     }
 }

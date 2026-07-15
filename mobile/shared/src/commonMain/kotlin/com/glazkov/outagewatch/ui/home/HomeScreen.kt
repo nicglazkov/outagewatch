@@ -267,7 +267,7 @@ private fun AreaCell(status: LocationStatus, last: Boolean, onOpenZip: (SavedLoc
         else -> listOfNotNull(
             outage.cause,
             etaBack(outage.eta),
-        ).joinToString(" · ").ifEmpty { "Outage reported" }
+        ).joinToString(", ").ifEmpty { "Outage reported" }
     }
     Cell(
         title = status.location.label,
