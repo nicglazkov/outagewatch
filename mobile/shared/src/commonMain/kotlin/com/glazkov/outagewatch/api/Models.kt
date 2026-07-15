@@ -73,6 +73,8 @@ data class SubscriptionRequest(
     @SerialName("quiet_end") val quietEnd: String? = null,
     val tz: String = "America/Los_Angeles",
     @SerialName("psps_warnings") val pspsWarnings: Boolean = true,
+    // True for an exact address: alert only when the outage covers the point.
+    val precise: Boolean = false,
 )
 
 @Serializable

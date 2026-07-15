@@ -146,6 +146,9 @@ class SubscriptionIn(BaseModel):
     quiet_end: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
     tz: str = "America/Los_Angeles"
     psps_warnings: bool = True
+    # True for an exact address: alert only when the outage covers the point, not
+    # when it is merely nearby. ZIP/region subscriptions leave this False.
+    precise: bool = False
 
     @field_validator("tz")
     @classmethod
@@ -404,6 +407,7 @@ async def create_subscription(
             raise HTTPException(status_code=422, detail="unknown California ZIP")
         data["lat"], data["lon"] = area.lat, area.lon
         data["radius_km"] = max(data["radius_km"], area.radius_km)
+        data["precise"] = False  # a ZIP centroid is an area, never an exact point
     sub = StoredSubscription(id=uuid.uuid4().hex, **data)
     deps.subs.upsert(sub)
     return {"id": sub.id}

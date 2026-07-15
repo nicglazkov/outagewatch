@@ -77,6 +77,7 @@ class StoredSubscription:
     quiet_end: str | None = None
     tz: str = "America/Los_Angeles"
     psps_warnings: bool = True
+    precise: bool = False  # an exact address: alert only inside the outage footprint
     created_at: str | None = None
 
     def to_matcher(self) -> Subscription:
@@ -87,6 +88,7 @@ class StoredSubscription:
             lat=self.lat,
             lon=self.lon,
             radius_km=self.radius_km,
+            precise=self.precise,
         )
 
 
