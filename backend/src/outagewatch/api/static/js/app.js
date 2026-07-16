@@ -411,16 +411,24 @@
   function enablePush() {
     var V = "https://www.gstatic.com/firebasejs/10.12.2/";
     Promise.all([loadScript(V + "firebase-app-compat.js"), loadScript(V + "firebase-messaging-compat.js")])
-      .then(function () {
-        firebase.initializeApp(window.OW_FIREBASE);
-        return navigator.serviceWorker.register("/firebase-messaging-sw.js?c=" + encodeURIComponent(JSON.stringify(window.OW_FIREBASE)));
+      .then(function () { return firebase.messaging.isSupported(); })
+      .then(function (supported) {
+        // Safari private mode and a few browsers report unsupported here.
+        if (!supported) throw { kind: "unsupported" };
+        if (!firebase.apps.length) firebase.initializeApp(window.OW_FIREBASE);
+        // Register the messaging worker on its OWN scope so it never clobbers the
+        // PWA service worker (both would otherwise claim "/", replacing each other
+        // on every load and dropping background notifications).
+        return navigator.serviceWorker.register(
+          "/firebase-messaging-sw.js?c=" + encodeURIComponent(JSON.stringify(window.OW_FIREBASE)),
+          { scope: "/firebase-cloud-messaging-push-scope" }
+        );
       })
       .then(function (reg) {
-        var messaging = firebase.messaging();
-        return messaging.getToken({ vapidKey: window.OW_VAPID_KEY, serviceWorkerRegistration: reg });
+        return firebase.messaging().getToken({ vapidKey: window.OW_VAPID_KEY, serviceWorkerRegistration: reg });
       })
       .then(function (token) {
-        if (!token) throw 0;
+        if (!token) throw { kind: "notoken" };
         var body = { token: token, platform: "web" };
         if (state.area.precise && state.area.lat != null) {
           // Exact address or current location: only alert when an outage covers it.
@@ -433,10 +441,23 @@
         return fetch(API + "/v1/subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       })
       .then(function (r) {
-        if (r.ok) { pushStatus.textContent = "Alerts are on for this area. You can close this tab."; pushBtn.textContent = "Alerts on"; }
-        else { throw 0; }
+        if (!r.ok) throw { kind: "server", status: r.status };
+        pushStatus.textContent = "Alerts are on for this area. You can close this tab.";
+        pushBtn.textContent = "Alerts on";
       })
-      .catch(function () { pushStatus.textContent = "Could not turn on alerts. Please try again."; pushBtn.disabled = false; });
+      .catch(function (e) {
+        // Log the real reason (for debugging) and tell the user something useful.
+        try { console.error("web push failed:", e); } catch (x) {}
+        pushBtn.disabled = false;
+        var code = (e && (e.code || e.kind || "")) + "";
+        if (/unsupported/i.test(code)) {
+          pushStatus.textContent = "This browser can't do web alerts. Try Chrome or Edge, or use the Android app.";
+        } else if (e && e.kind === "server") {
+          pushStatus.textContent = "The server couldn't save the alert just now. Please try again in a moment.";
+        } else {
+          pushStatus.textContent = "Couldn't turn on alerts. Private/incognito windows and some ad or privacy blockers block web push — open this page in a normal window and try again.";
+        }
+      });
   }
 
   // ---------- Deep links + restore ----------
