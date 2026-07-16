@@ -1,14 +1,17 @@
-/* OutageWatch web app. Talks to the same-origin public API. No framework. */
+/* OutageWatch web app. Talks to the same-origin public API. No framework.
+   Direction "V2": a calm forecast-led answer, a restoration timeline, and an
+   honest one-line schematic built from the real outages (no invented feeder or
+   node ids, since PG&E's public feed gives outages, not circuit topology). */
 (function () {
   "use strict";
   var API = "";
   var $ = function (s) { return document.querySelector(s); };
   var state = { area: null, outages: [], statewide: [], center: null, territory: null, map: null, mapReady: false, timer: null, lastFetch: null };
 
-  // Map colors read on both light (positron) and dark tiles.
-  var C_OUT = "#dd4b2e", C_PSPS = "#e0913a", C_ME = "#2b5fd0";
-  // PG&E territory overview, shown before you search so the panel is never empty.
+  var C_OUT = "#c0562a", C_PSPS = "#e0913a", C_ME = "#2b5fd0";
   var HOME = { center: [-121.7, 38.85], zoom: 5.6 };
+  var F = "system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
+  var MONO = "ui-monospace,'Cascadia Mono',Consolas,'SFMono-Regular',Menlo,monospace";
 
   // ---------- helpers ----------
   function el(tag, cls, text) {
@@ -18,12 +21,19 @@
     return e;
   }
   function empty() { return { type: "FeatureCollection", features: [] }; }
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
   function fmtEta(iso) {
     if (!iso) return "No restoration estimate yet";
     var d = new Date(iso);
     if (isNaN(d)) return "No restoration estimate yet";
     var s = d.toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     return (d < new Date() ? "Estimate passed: " : "Estimated restoration: ") + s;
+  }
+  function fmtClock(v) {
+    if (v == null) return null;
+    var d = new Date(v);
+    if (isNaN(d)) return null;
+    return d.toLocaleString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" });
   }
   function label(o) { return o.is_psps ? "PSPS shutoff" : "Power outage"; }
   function ago(ts) {
@@ -37,10 +47,8 @@
   function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 
-  // Does an outage actually reach a specific point? A polygon must contain it; a
-  // coordinate-only outage counts only within ~250m. This mirrors the app's
-  // precise-address rule, so an outage that is merely nearby never reads as
-  // "your power is out".
+  // Does an outage actually reach a point? A polygon must contain it; a
+  // coordinate-only outage counts within ~250m. Mirrors the app's precise rule.
   function haversineKm(aLat, aLon, bLat, bLon) {
     var R = 6371, rad = Math.PI / 180;
     var dLat = (bLat - aLat) * rad, dLon = (bLon - aLon) * rad;
@@ -68,6 +76,15 @@
     if (o.lat != null && o.lon != null) return haversineKm(lat, lon, o.lat, o.lon) <= 0.25;
     return false;
   }
+  function distMi(o) {
+    if (!state.center || o.lat == null || o.lon == null) return null;
+    return haversineKm(state.center.lat, state.center.lon, o.lat, o.lon) * 0.621371;
+  }
+  function distLabel(o, isCov) {
+    if (isCov) return "0.0 mi";
+    var mi = distMi(o);
+    return mi == null ? null : (mi < 0.1 ? "under 0.1 mi" : mi.toFixed(1) + " mi");
+  }
 
   // ---------- mode tabs ----------
   document.querySelectorAll(".tab").forEach(function (t) {
@@ -93,15 +110,11 @@
     state.area = { zip: zip };
     state.center = null;
     state.territory = null;
-    // The centroid says where to fly; the outages fill the list. They load
-    // independently, and either order is fine: the map already shows the
-    // statewide set and only flies once the centroid lands.
     fetch(API + "/v1/zips/" + zip).then(function (r) { return r.ok ? r.json() : null; }).then(function (info) {
       state.center = info ? { lat: info.lat, lon: info.lon } : null;
       state.territory = info;
       drawOutages();
       if (!isAuto) flyToSearch();
-      renderTerritoryNotice();
     }).catch(function () {});
     fetch(API + "/v1/outages?zip=" + zip)
       .then(function (r) {
@@ -147,7 +160,6 @@
     var s = acItems[i]; if (!s) return;
     $("#addr-input").value = s.title;
     hideAc();
-    // An exact address: alerts should fire only if an outage covers it.
     state.area = { lat: s.lat, lon: s.lon, name: s.title, zip: s.zip, precise: true };
     checkPoint(s.lat, s.lon, s.zip);
   }
@@ -171,7 +183,7 @@
     var btn = this; btn.textContent = "Locating...";
     navigator.geolocation.getCurrentPosition(function (pos) {
       btn.textContent = "Use my current location";
-      state.area = { lat: pos.coords.latitude, lon: pos.coords.longitude, name: "Your location", precise: true };
+      state.area = { lat: pos.coords.latitude, lon: pos.coords.longitude, name: "your location", precise: true };
       checkPoint(pos.coords.latitude, pos.coords.longitude, null);
     }, function () {
       btn.textContent = "Use my current location";
@@ -192,32 +204,47 @@
       .catch(function () { showMsg("Could not reach the outage feed. Try again shortly."); });
   }
 
-  // ---------- Status line + render ----------
-  function setStatus(parts, sub) {
-    var l = $("#statusline"); l.textContent = "";
-    parts.forEach(function (p) { l.appendChild(el("span", p.cls || null, p.t)); });
-    $("#statussub").textContent = sub || "";
+  // ---------- status block ----------
+  function setCond(parts) {
+    var h = $("#cond-h"); h.textContent = "";
+    parts.forEach(function (p) { h.appendChild(el("span", p.cls || null, p.t)); });
   }
   function areaName() {
     return (state.area && (state.area.name || (state.area.zip ? "ZIP " + state.area.zip : ""))) || "your area";
   }
-  function setLoading() { setStatus([{ t: "Checking..." }], ""); $("#result").textContent = ""; }
+  function setLoading() {
+    $("#asof").textContent = "";
+    setCond([{ t: "Checking..." }]);
+    $("#place").textContent = "";
+    $("#detail").textContent = "";
+    $("#detail-block").textContent = "";
+    $("#nearby-block").textContent = "";
+  }
   function showMsg(m) {
-    setStatus([{ t: "Is your power out?" }], "");
-    $("#result").textContent = "";
-    $("#result").appendChild(el("div", "notice", m));
+    $("#asof").textContent = "";
+    setCond([{ t: "Is your power out?" }]);
+    $("#place").textContent = "";
+    $("#detail").textContent = "";
+    $("#detail-block").textContent = "";
+    var nb = $("#nearby-block"); nb.textContent = "";
+    nb.appendChild(el("div", "notice", m));
     state.outages = [];
     drawOutages();
   }
-
-  function renderTerritoryNotice() {
-    var r = $("#result");
-    var ex = r.querySelector(".notice.territory");
-    if (ex) ex.remove();
+  function territoryNotice() {
     if (state.territory && state.territory.pge === false) {
-      var n = el("div", "notice territory", "This ZIP is served by " + (state.territory.served_by || "another utility") + ", not PG&E. Outage data may be limited.");
-      r.insertBefore(n, r.firstChild);
+      return el("div", "notice", "This ZIP is served by " + (state.territory.served_by || "another utility") + ", not PG&E. Outage data may be limited.");
     }
+    return null;
+  }
+
+  function coverDetail(cov) {
+    var homes = cov.est_customers;
+    var s = (cov.cause || "An outage") + " is affecting " +
+      (homes ? (homes + " home" + (homes === 1 ? "" : "s")) : "your service") + " at this address.";
+    var clk = fmtClock(cov.eta);
+    s += clk ? (" Crews estimate power back at " + clk + "." ) : " No restoration estimate yet.";
+    return s;
   }
 
   function render(list) {
@@ -225,62 +252,257 @@
     state.lastFetch = Date.now();
     var name = areaName();
     var out = state.outages.length;
-    // "Power is out" is only honest for an exact address an outage actually
-    // covers. A ZIP is an area, and an outage that is merely nearby is not your
-    // outage, so those read as "likely on, outage nearby" and steer you to the
-    // precise address check.
     var precise = !!(state.area && state.area.precise && state.center);
-    var covering = precise
-      ? state.outages.filter(function (o) { return impacts(o, state.center.lat, state.center.lon); })
-      : [];
-    if (precise && covering.length) {
-      setStatus([{ t: "Power is " }, { t: "out", cls: "out" }, { t: " at " + name + "." }],
-        covering.length === 1 ? "An outage is affecting this address." : covering.length + " outages are affecting this address.");
-    } else if (precise) {
-      setStatus([{ t: "Power is likely " }, { t: "on", cls: "clear" }, { t: " at " + name + "." }],
-        out ? out + (out === 1 ? " outage" : " outages") + " reported nearby, but none reaching this address." : "No outages near this address right now.");
-    } else if (out) {
-      setStatus([{ t: "Power is likely " }, { t: "on", cls: "clear" }, { t: " near " + name + "." }],
-        out + (out === 1 ? " outage" : " outages") + " reported nearby. Enter your street address to see if yours is affected.");
-    } else {
-      setStatus([{ t: "No outages", cls: "clear" }, { t: " near " + name + "." }],
-        "PG&E reports nothing in this area right now.");
-    }
+    var covering = precise ? state.outages.filter(function (o) { return impacts(o, state.center.lat, state.center.lon); }) : [];
+    var cov = covering[0] || null;
 
-    var r = $("#result"); r.textContent = "";
-    if (out) {
-      var box = el("div", "outages");
-      box.appendChild(el("h2", null, (precise && covering.length) ? (covering.length === 1 ? "The outage" : "The outages") : "Nearby outages"));
-      state.outages.slice(0, 20).forEach(function (o) {
-        var row = el("button", "orow" + (o.is_psps ? " psps" : ""));
-        row.type = "button";
-        row.appendChild(el("div", "sev"));
-        var g = el("div", "g");
-        g.appendChild(el("div", "title", label(o) + (o.city ? " in " + o.city : "")));
-        var bits = [];
-        if (o.cause) bits.push(o.cause);
-        if (o.est_customers) bits.push(o.est_customers + (o.est_customers === 1 ? " customer" : " customers"));
-        g.appendChild(el("div", "meta", bits.join(", ")));
-        g.appendChild(el("div", "meta", fmtEta(o.eta)));
-        row.appendChild(g);
-        row.addEventListener("click", function () { openDetail(o); });
-        box.appendChild(row);
-      });
-      r.appendChild(box);
-      r.appendChild(el("p", "freshness", "Updated " + ago(state.lastFetch) + ". Data from PG&E, can lag."));
+    if (precise && cov) {
+      setCond([{ t: "Power is " }, { t: "out", cls: "em-out" }]);
+      $("#place").textContent = "at your address, " + name;
+      $("#detail").textContent = coverDetail(cov);
+    } else if (precise) {
+      setCond([{ t: "Power is likely " }, { t: "on", cls: "em-on" }]);
+      $("#place").textContent = "at " + name;
+      $("#detail").textContent = out
+        ? (out + " outage" + (out === 1 ? "" : "s") + " reported nearby, but none reaching this address.")
+        : "No outages near this address right now.";
+    } else if (out) {
+      setCond([{ t: "Power is likely " }, { t: "on", cls: "em-on" }]);
+      $("#place").textContent = "near " + name;
+      $("#detail").textContent = out + " outage" + (out === 1 ? "" : "s") + " reported nearby. Enter your street address to see if yours is affected.";
+    } else {
+      setCond([{ t: "No outages", cls: "em-on" }]);
+      $("#place").textContent = "near " + name;
+      $("#detail").textContent = "PG&E reports nothing in this area right now.";
     }
-    renderTerritoryNotice();
+    $("#asof").textContent = "Updated " + (fmtClock(Date.now()) || "just now");
+
+    var db = $("#detail-block"); db.textContent = "";
+    if (precise && cov && cov.eta) {
+      var tl = buildTimeline(cov.eta);
+      if (tl) db.appendChild(tl);
+    }
+    if (out) { db.appendChild(buildSchematic(cov)); }
+    if (precise && cov) { db.appendChild(buildFacts(cov)); }
+
+    var nb = $("#nearby-block"); nb.textContent = "";
+    var note = territoryNotice(); if (note) nb.appendChild(note);
+    if (out) { nb.appendChild(buildNearby(precise, cov)); }
+
     drawOutages();
     scheduleRefresh();
+  }
+
+  // ---------- restoration timeline (signature) ----------
+  function buildTimeline(etaIso) {
+    var nowMs = Date.now(), etaMs = Date.parse(etaIso);
+    if (!etaMs || isNaN(etaMs)) return null;
+    var clk = fmtClock(etaIso);
+    var passed = etaMs <= nowMs;
+    var outSpan = Math.max(etaMs - nowMs, 0);
+    var tail = Math.max(outSpan * 0.26, 45 * 60000);
+    var outPct = passed ? 100 : Math.round((outSpan / (outSpan + tail)) * 1000) / 10;
+
+    var fig = el("figure", "forecast");
+    var cap = el("figcaption", "fc-cap");
+    cap.appendChild(el("h2", null, "Restoration timeline"));
+    cap.appendChild(el("p", null, passed
+      ? ("The estimate of " + clk + " has passed. Crews may still be working.")
+      : ("Estimated back at " + clk + ".")));
+    fig.appendChild(cap);
+
+    var strip = el("div", "fc-strip");
+    var callout = el("div", "fc-callout"); callout.style.left = outPct + "%";
+    callout.appendChild(el("span", "fc-callout-time", clk));
+    callout.appendChild(el("span", "fc-callout-note", passed ? "estimate passed" : "power back"));
+    strip.appendChild(callout);
+
+    var bar = el("div", "fc-bar"); bar.setAttribute("aria-hidden", "true");
+    var so = el("div", "fc-seg fc-out"); so.style.width = outPct + "%"; bar.appendChild(so);
+    if (!passed) { var sb = el("div", "fc-seg fc-back"); sb.style.width = (100 - outPct) + "%"; bar.appendChild(sb); }
+    var stop = el("div", "fc-stop"); stop.style.left = outPct + "%"; bar.appendChild(stop);
+    strip.appendChild(bar);
+
+    var hours = el("div", "fc-hours"); hours.setAttribute("aria-hidden", "true");
+    var hn = el("span", "h-now", "Now"); hn.style.left = "0"; hours.appendChild(hn);
+    var hb = el("span", "h-back", clk); hb.style.left = outPct + "%"; hours.appendChild(hb);
+    if (!passed) { var he = el("span", "h-end", "later"); he.style.left = "100%"; hours.appendChild(he); }
+    strip.appendChild(hours);
+    fig.appendChild(strip);
+
+    var lg = el("div", "fc-legend"); lg.setAttribute("aria-hidden", "true");
+    lg.appendChild(el("span", "lg lg-out", "Out"));
+    lg.appendChild(el("span", "lg lg-back", "Power back"));
+    fig.appendChild(lg);
+
+    fig.appendChild(el("p", "visually-hidden",
+      "Power is out now and is estimated to return at " + clk + ". The timeline is orange while out and green once power is back."));
+    return fig;
+  }
+
+  // ---------- annotated one-line schematic, built from the real outages ----------
+  function shownOutages(cov) {
+    return state.outages.slice().sort(function (a, b) {
+      var ac = a === cov, bc = b === cov;
+      if (ac !== bc) return ac ? -1 : 1;
+      var ad = distMi(a), bd = distMi(b);
+      ad = ad == null ? 1e9 : ad; bd = bd == null ? 1e9 : bd;
+      return ad - bd;
+    });
+  }
+  function svLine(x1, y1, x2, y2, stroke, w) {
+    return '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' + stroke + '" stroke-width="' + w + '" stroke-linecap="round"/>';
+  }
+  function svDot(cx, cy, r, fill) { return '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="' + fill + '"/>'; }
+  function svRing(cx, cy, r, stroke, w, op) { return '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + stroke + '" stroke-width="' + w + '"' + (op != null ? ' stroke-opacity="' + op + '"' : '') + '/>'; }
+  function svText(x, y, fill, size, family, text, anchor, weight) {
+    return '<text x="' + x + '" y="' + y + '"' + (anchor ? ' text-anchor="' + anchor + '"' : '') +
+      ' font-family="' + family + '" font-size="' + size + '"' + (weight ? ' font-weight="' + weight + '"' : '') +
+      ' fill="' + fill + '">' + esc(text) + '</text>';
+  }
+  function svTag(x, y, w, txt) {
+    return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="18" rx="5" fill="rgba(192,86,42,0.10)"/>' +
+      svText(x + w / 2, y + 13, '#c0562a', 11, F, txt, 'middle', 600);
+  }
+  function schSvg(rows, cov) {
+    var busX = 100, gx0 = 103, breakX = 250, deEnd = 350, nodeX = 352, cardX = 362, cardW = 262;
+    var rowY = function (i) { return 120 + i * 130; };
+    var n = rows.length;
+    var H = rowY(n - 1) + 80;
+    var s = '<svg viewBox="0 0 640 ' + H + '" role="img" aria-label="One-line view of the outages near you" preserveAspectRatio="xMidYMin meet">';
+    s += svLine(busX, rowY(0), busX, rowY(n - 1), '#20242a', 8);
+    s += svText(busX, rowY(0) - 30, '#20242a', 14, F, 'the grid near you', 'middle', 700);
+    rows.forEach(function (o, i) {
+      var y = rowY(i), isCov = (o === cov), psps = !!o.is_psps;
+      s += svDot(busX, y, 3.5, '#20242a');
+      s += svLine(gx0, y, breakX, y, '#2f7d5b', 5);
+      if (psps) {
+        s += svLine(breakX, y, breakX + 14, y - 16, '#5c6069', 3.2);
+        s += svDot(breakX, y, 2.6, '#5c6069') + svDot(breakX + 20, y, 2.6, '#5c6069');
+        s += svText(breakX + 9, y + 26, '#5c6069', 11.5, MONO, 'planned open', 'middle');
+        s += svLine(breakX + 20, y, deEnd, y, '#c0562a', 5);
+      } else {
+        s += svLine(breakX, y - 14, breakX, y + 14, '#c0562a', 3.2);
+        s += svLine(breakX + 17, y - 14, breakX + 17, y + 14, '#c0562a', 3.2);
+        s += svText(breakX + 8, y + 30, '#c0562a', 11.5, MONO, 'open point', 'middle');
+        s += svLine(breakX + 17, y, deEnd, y, '#c0562a', 5);
+      }
+      if (isCov) { s += svRing(nodeX, y, 10, '#20242a', 1.5, 0.55) + svDot(nodeX, y, 6, '#c0562a'); }
+      else if (psps) { s += svRing(nodeX, y, 6, '#c0562a', 3, null); }
+      else { s += svDot(nodeX, y, 6, '#c0562a'); }
+      var cy = y - 54;
+      s += '<rect x="' + cardX + '" y="' + cy + '" width="' + cardW + '" height="108" rx="11" fill="#ffffff" stroke="#e3e5e9" stroke-width="1"/>';
+      var title = isCov ? (o.city || "Your address") : (o.city || (psps ? "Planned shutoff" : "Power outage"));
+      s += svText(378, y - 30, '#20242a', 16, F, title, 'start', 700);
+      if (isCov) { s += svTag(452, y - 42, 94, 'your address'); }
+      else if (psps) { s += svTag(452, y - 42, 62, 'planned'); }
+      s += svText(378, y - 10, '#20242a', 13, F, o.cause || (psps ? "Planned safety shutoff" : "Cause not stated"), 'start');
+      var homes = o.est_customers ? (o.est_customers + " home" + (o.est_customers === 1 ? "" : "s")) : "homes not stated";
+      var dl = distLabel(o, isCov);
+      s += svText(378, y + 9, '#5c6069', 12, MONO, homes + (dl ? (", " + dl) : ""), 'start');
+      var clk = fmtClock(o.eta);
+      s += '<text x="378" y="' + (y + 28) + '" font-family="' + MONO + '" font-size="12" fill="#5c6069">' +
+        (clk ? ('de-energized, back <tspan fill="#276b4e" font-weight="700">' + esc(clk) + '</tspan>') : 'de-energized, no estimate') + '</text>';
+    });
+    s += '</svg>';
+    return s;
+  }
+  function buildSchematic(cov) {
+    var shown = shownOutages(cov);
+    var capped = shown.slice(0, 4);
+    var more = shown.length - capped.length;
+    var sec = el("section", "why");
+    var h = el("h2", null, "Why it is out"); sec.appendChild(h);
+    sec.appendChild(el("p", "why-lead", cov
+      ? "The grid near you is live in green up to an open point on your street, then de-energized past it."
+      : "The outages near you, drawn on one line. Your address is not on an out segment right now."));
+    var scroll = el("div", "sch-scroll");
+    scroll.innerHTML = schSvg(capped, cov);
+    sec.appendChild(scroll);
+    sec.appendChild(el("p", "sch-hint", "Scroll the diagram sideways on a small screen. Every value here is repeated in the list below."));
+    var lg = el("div", "sc-legend"); lg.setAttribute("aria-hidden", "true");
+    lg.innerHTML =
+      '<span class="sc sc-line sc-live">Energized</span>' +
+      '<span class="sc sc-line sc-out">De-energized</span>' +
+      '<span class="sc sc-icon"><svg viewBox="0 0 20 14"><line x1="6" y1="1" x2="6" y2="13" stroke="#c0562a" stroke-width="2.4" stroke-linecap="round"/><line x1="14" y1="1" x2="14" y2="13" stroke="#c0562a" stroke-width="2.4" stroke-linecap="round"/></svg>Open point</span>' +
+      '<span class="sc sc-icon"><svg viewBox="0 0 20 14"><line x1="4" y1="12" x2="13" y2="2" stroke="#5c6069" stroke-width="2.4" stroke-linecap="round"/><circle cx="4" cy="12" r="1.8" fill="#5c6069"/><circle cx="16" cy="12" r="1.8" fill="#5c6069"/></svg>Planned shutoff</span>' +
+      (cov ? '<span class="sc sc-icon"><svg viewBox="0 0 20 14"><circle cx="10" cy="7" r="5.5" fill="none" stroke="#20242a" stroke-width="1.4" stroke-opacity="0.55"/><circle cx="10" cy="7" r="3" fill="#c0562a"/></svg>Your address</span>' : '');
+    sec.appendChild(lg);
+    var noteTxt = cov
+      ? ("The break upstream of your street is what crews are working to close" + (fmtClock(cov.eta) ? (", estimated by " + fmtClock(cov.eta) + ".") : ".") + " Distances are straight-line from your address.")
+      : "These are the outages near the area you checked, with straight-line distances.";
+    if (more > 0) noteTxt += " " + more + " more " + (more === 1 ? "outage is" : "outages are") + " listed below.";
+    sec.appendChild(el("p", "why-note", noteTxt));
+    return sec;
+  }
+
+  // ---------- service facts (covered address only) ----------
+  function buildFacts(cov) {
+    var sec = el("section", "facts");
+    sec.appendChild(el("h2", null, "This service, in detail"));
+    var dl = el("dl", "facts-grid");
+    function row(k, v, cls) {
+      if (v == null || v === "") return;
+      var d = el("div");
+      d.appendChild(el("dt", null, k));
+      d.appendChild(el("dd", cls || null, String(v)));
+      dl.appendChild(d);
+    }
+    row("Status", "Out, de-energized", "v-out");
+    row("Cause", cov.cause || "Not stated");
+    row("Homes affected", cov.est_customers != null ? cov.est_customers : null);
+    row("Estimated restoration", fmtClock(cov.eta) || "None yet", "v-back");
+    row("Distance to outage", "0.0 mi, it reaches you");
+    row("City", cov.city);
+    row("Crew status", cov.crew_status);
+    row("Last updated", fmtClock(Date.now()));
+    sec.appendChild(dl);
+    return sec;
+  }
+
+  // ---------- nearby outages ----------
+  function buildNearby(precise, cov) {
+    var sec = el("section", "nearby");
+    var head = el("div", "sec-head");
+    head.appendChild(el("h2", null, "Nearby outages"));
+    head.appendChild(el("p", null, (precise && cov)
+      ? "Every outage near your address, nearest first."
+      : precise ? "Outages near you. None reach this address."
+        : "Outages reported near this area, nearest first."));
+    sec.appendChild(head);
+    var ul = el("ul", "nb-list");
+    shownOutages(cov).slice(0, 20).forEach(function (o) {
+      var isCov = (o === cov), psps = !!o.is_psps;
+      var li = el("button", "nb-row"); li.type = "button";
+      li.appendChild(el("span", "nb-dot " + (psps ? "dot-plan" : "dot-out")));
+      var main = el("div", "nb-main");
+      var place = el("p", "nb-place");
+      place.appendChild(document.createTextNode(o.city || (psps ? "Planned shutoff" : "Power outage")));
+      if (isCov) place.appendChild(el("span", "nb-tag", "your address"));
+      main.appendChild(place);
+      main.appendChild(el("p", "nb-cause", (psps ? "Planned safety shutoff. " : "Power out. ") +
+        (o.cause ? o.cause + ", " : "") + (o.est_customers ? o.est_customers + " home" + (o.est_customers === 1 ? "" : "s") + "." : "")));
+      var dl = distLabel(o, isCov);
+      main.appendChild(el("p", "nb-meta", (dl ? dl + ", " : "") + "de-energized" + (psps ? " (planned)" : "")));
+      li.appendChild(main);
+      var back = el("div", "nb-back");
+      back.appendChild(el("span", "nb-back-time", fmtClock(o.eta) || "No estimate"));
+      back.appendChild(el("span", "nb-back-lbl", "back"));
+      li.appendChild(back);
+      li.addEventListener("click", function () { openDetail(o); });
+      ul.appendChild(li);
+    });
+    sec.appendChild(ul);
+    sec.appendChild(el("p", "freshness", "Updated " + ago(state.lastFetch) + ". Data from PG&E, can lag."));
+    return sec;
   }
 
   // ---------- Map (one persistent instance) ----------
   function initMap() {
     if (typeof maplibregl === "undefined") return;
-    var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     var map = new maplibregl.Map({
       container: "map",
-      style: dark ? "https://tiles.openfreemap.org/styles/dark" : "https://tiles.openfreemap.org/styles/positron",
+      style: "https://tiles.openfreemap.org/styles/positron",
       center: HOME.center, zoom: HOME.zoom, attributionControl: false
     });
     map.addControl(new maplibregl.AttributionControl({ compact: true }));
@@ -293,8 +515,6 @@
       map.addSource("pt", { type: "geojson", data: empty() });
       map.addLayer({
         id: "ptc", type: "circle", source: "pt", paint: {
-          // Small when zoomed out to the whole territory, larger up close, so the
-          // statewide view reads like the full statewide map, not a wall of blobs.
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 3, 12, 7],
           "circle-color": ["get", "color"], "circle-opacity": 0.85,
           "circle-stroke-width": 1.5, "circle-stroke-color": "#fff"
@@ -311,9 +531,6 @@
       if (state.center) flyToSearch();
     });
   }
-
-  // Every current outage across PG&E territory, so the mini map shows the same
-  // set as the full statewide map when you zoom out. A search flies in on top.
   function loadStatewide() {
     fetch(API + "/v1/statewide?include_geometry=true")
       .then(function (r) { return r.ok ? r.json() : []; })
@@ -325,8 +542,6 @@
     for (var i = 0; i < all.length; i++) { if (all[i].id === id) return all[i]; }
     return null;
   }
-  // Draw the statewide outages plus the you-are-here marker. Never moves the
-  // camera, so the periodic refresh can't yank the map while you are panning it.
   function drawOutages() {
     var map = state.map;
     if (!map || !state.mapReady) return;
@@ -340,7 +555,6 @@
     map.getSource("pt").setData({ type: "FeatureCollection", features: pts });
     map.getSource("me").setData(state.center ? { type: "Feature", geometry: { type: "Point", coordinates: [state.center.lon, state.center.lat] } } : empty());
   }
-  // Fly to a searched area. Only on an explicit search, never on auto-refresh.
   function flyToSearch() {
     if (state.map && state.mapReady && state.center) {
       state.map.flyTo({ center: [state.center.lon, state.center.lat], zoom: 11, duration: 700 });
@@ -357,7 +571,7 @@
     close.setAttribute("aria-label", "Close");
     close.addEventListener("click", closeModal);
     m.appendChild(close);
-    var h = el("h2", null, label(o));
+    var h = el("h2", null, label(o) + (o.city ? " in " + o.city : ""));
     h.id = "modal-title";
     m.appendChild(h);
     m.appendChild(el("p", "eta", fmtEta(o.eta)));
@@ -416,26 +630,21 @@
     loadScript(V + "firebase-app-compat.js")
       .then(function () { return loadScript(V + "firebase-messaging-compat.js"); })
       .then(function () {
-        // isSupported is a static that a few versions/environments lack; guard it
-        // so a missing method never throws before we even try.
         return (firebase.messaging && firebase.messaging.isSupported) ? firebase.messaging.isSupported() : true;
       })
       .then(function (supported) {
-        // Safari private mode and a few browsers report unsupported here.
         if (!supported) throw { kind: "unsupported" };
         if (!firebase.apps.length) firebase.initializeApp(window.OW_FIREBASE);
         // Register the messaging worker on its OWN scope so it never clobbers the
-        // PWA service worker (both would otherwise claim "/", replacing each other
-        // on every load and dropping background notifications).
+        // PWA service worker (both would otherwise claim "/").
         return navigator.serviceWorker.register(
           "/firebase-messaging-sw.js?c=" + encodeURIComponent(JSON.stringify(window.OW_FIREBASE)),
           { scope: "/firebase-cloud-messaging-push-scope" }
         );
       })
       .then(function (reg) {
-        // PushManager.subscribe needs an ACTIVE worker. A brand-new registration
-        // on its own scope is still installing, so wait for it to activate before
-        // getToken (skipping this is the "no active Service Worker" error).
+        // PushManager.subscribe needs an ACTIVE worker; a brand-new registration
+        // on its own scope is still installing, so wait for activation.
         if (reg.active) return reg;
         return new Promise(function (resolve, reject) {
           var w = reg.installing || reg.waiting;
@@ -453,10 +662,9 @@
         if (!token) throw { kind: "notoken" };
         var body = { token: token, platform: "web" };
         if (state.area.precise && state.area.lat != null) {
-          // Exact address or current location: only alert when an outage covers it.
           body.lat = state.area.lat; body.lon = state.area.lon; body.precise = true;
         } else if (state.area.zip) {
-          body.zip_code = state.area.zip;  // ZIP area: alert on anything nearby
+          body.zip_code = state.area.zip;
         } else if (state.area.lat != null) {
           body.lat = state.area.lat; body.lon = state.area.lon;
         }
@@ -468,7 +676,6 @@
         pushBtn.textContent = "Alerts on";
       })
       .catch(function (e) {
-        // Log the real reason (for debugging) and tell the user something useful.
         try { console.error("web push failed:", e); } catch (x) {}
         pushBtn.disabled = false;
         var code = (e && (e.code || e.kind || "")) + "";
@@ -477,7 +684,7 @@
         } else if (e && e.kind === "server") {
           pushStatus.textContent = "The server couldn't save the alert just now. Please try again in a moment.";
         } else {
-          pushStatus.textContent = "Couldn't turn on alerts. Private/incognito windows and some ad or privacy blockers block web push — open this page in a normal window and try again.";
+          pushStatus.textContent = "Couldn't turn on alerts. Private/incognito windows and some ad or privacy blockers block web push. Open this page in a normal window and try again.";
         }
       });
   }
@@ -497,7 +704,6 @@
       } catch (e) {}
     }
   }
-  // register the app service worker (PWA shell) regardless of push
   if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js").catch(function () {}); }
   boot();
 })();
