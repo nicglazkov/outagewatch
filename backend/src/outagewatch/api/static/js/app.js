@@ -425,6 +425,20 @@
         );
       })
       .then(function (reg) {
+        // PushManager.subscribe needs an ACTIVE worker. A brand-new registration
+        // on its own scope is still installing, so wait for it to activate before
+        // getToken (skipping this is the "no active Service Worker" error).
+        if (reg.active) return reg;
+        return new Promise(function (resolve, reject) {
+          var w = reg.installing || reg.waiting;
+          if (!w) { reject({ kind: "noworker" }); return; }
+          w.addEventListener("statechange", function () {
+            if (w.state === "activated") resolve(reg);
+            else if (w.state === "redundant") reject({ kind: "noworker" });
+          });
+        });
+      })
+      .then(function (reg) {
         return firebase.messaging().getToken({ vapidKey: window.OW_VAPID_KEY, serviceWorkerRegistration: reg });
       })
       .then(function (token) {
