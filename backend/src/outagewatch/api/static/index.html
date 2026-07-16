@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Is Your Power Out? Live PG&E Outage Map & Status | OutageWatch</title>
 <meta name="description" content="See live PG&E power outages on a map, check any ZIP or address for restoration times, and get free alerts. No account. Not affiliated with PG&E.">
-<meta name="theme-color" content="#eceff4">
+<meta name="theme-color" content="#eceef0">
 <link rel="canonical" href="https://outagewatch-api-7bi2fdpqrq-uw.a.run.app/">
 <link rel="manifest" href="/static/manifest.webmanifest">
 <link rel="icon" href="/static/icons/icon-192.png">
@@ -22,127 +22,126 @@
 </head>
 <body>
 
-<header class="head"><div class="head-in">
-  <a class="brand" href="/"><img src="/static/icons/icon-192.png" alt=""> OutageWatch</a>
-  <nav>
+<header class="site"><div class="wrap site-inner">
+  <a class="brand" href="/" aria-label="OutageWatch home">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 26 26" width="26" height="26" fill="none">
+        <circle cx="13" cy="13" r="12" fill="#20242a"/>
+        <path d="M14.2 5.5 8.2 14.1h4.1l-1.3 6.4 6.1-8.7h-4.2l1.3-6.3Z" fill="#c0562a"/>
+      </svg>
+    </span>
+    OutageWatch
+  </a>
+  <nav class="nav" aria-label="Primary">
     <a href="/statewide">Statewide map</a>
     <a href="#get">Get the app</a>
   </nav>
 </div></header>
 
-<section class="hero">
-  <div class="hero-in">
-    <div class="hero-main">
-      <p class="eyebrow">Live PG&amp;E outage map &amp; status</p>
-      <div class="status">
-        <h1 class="line" id="statusline">Is your power out?</h1>
-        <p class="sub" id="statussub">Check any ZIP or address across PG&amp;E's Northern and Central California territory. No account.</p>
-      </div>
-
-      <div class="checker">
-        <div class="modes" role="tablist" aria-label="Search by">
-          <button class="tab" data-mode="zip" role="tab" aria-selected="true">ZIP code</button>
-          <button class="tab" data-mode="address" role="tab" aria-selected="false">Address</button>
-        </div>
-
-        <form id="zip-form" class="row">
-          <label for="zip-input" class="hidden">ZIP code</label>
-          <input id="zip-input" class="uinput" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"
-                 placeholder="ZIP code, e.g. 95404" autocomplete="postal-code" required>
-          <button class="go" type="submit">Check</button>
-        </form>
-
-        <form id="addr-form" class="row hidden">
-          <label for="addr-input" class="hidden">Street address</label>
-          <div class="ac">
-            <input id="addr-input" class="uinput" placeholder="Street address or place" autocomplete="off" aria-autocomplete="list">
-            <div id="addr-list" class="ac-list hidden" role="listbox" aria-label="Address suggestions"></div>
-          </div>
-          <button class="go" type="submit">Check</button>
-        </form>
-
-        <div class="locate"><button id="locate-btn" type="button">Use my current location</button></div>
-      </div>
-
-      <div id="result"></div>
-
-      <section class="alerts" id="alerts">
-        <strong>Get an alert when this changes</strong>
-        <p>A notification when an outage starts, when the estimate moves, and when power is back. Free, no account.</p>
-        <button id="push-btn" class="btn" type="button">Turn on browser alerts</button>
-        <p id="push-status" style="margin:10px 0 0; min-height:1em; color:var(--soft)"></p>
-      </section>
-    </div>
-
-    <div class="hero-map">
-      <div id="map" role="img" aria-label="Map of PG&amp;E outages"></div>
-    </div>
-  </div>
-</section>
-
 <main class="wrap">
-  <section class="section">
-    <h2>How it works</h2>
-    <div class="about">
-      <div><h3>Only what matters</h3><p>Alerts fire when an outage starts, when the restoration estimate moves, when power returns, and for planned safety shutoffs. An address only alerts if the outage actually reaches it.</p></div>
-      <div><h3>Plain-language answers</h3><p>Each outage gets a short, calm explanation of what is going on and when power is expected back, drawn from the real feed.</p></div>
-      <div><h3>No account, no ads</h3><p>Free to use. No sign-up, no tracking. Your saved area stays on your device.</p></div>
+
+  <section class="search" aria-label="Check an area">
+    <p class="search-title">Check your address or ZIP</p>
+    <div class="modes" role="tablist" aria-label="Search by">
+      <button type="button" class="tab" data-mode="zip" role="tab" aria-selected="true">ZIP code</button>
+      <button type="button" class="tab" data-mode="address" role="tab" aria-selected="false">Address</button>
+    </div>
+    <form id="zip-form" class="search-row">
+      <label for="zip-input" class="visually-hidden">ZIP code</label>
+      <input id="zip-input" type="text" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"
+             placeholder="ZIP code, e.g. 95404" autocomplete="postal-code">
+      <button type="submit" class="btn btn-ink">Check</button>
+    </form>
+    <form id="addr-form" class="search-row hidden">
+      <label for="addr-input" class="visually-hidden">Street address</label>
+      <div class="ac">
+        <input id="addr-input" type="text" placeholder="Street address or place" autocomplete="off" aria-autocomplete="list">
+        <div id="addr-list" class="ac-list hidden" role="listbox" aria-label="Address suggestions"></div>
+      </div>
+      <button type="submit" class="btn btn-ink">Check</button>
+    </form>
+    <div class="locate"><button id="locate-btn" type="button">Use my current location</button></div>
+  </section>
+
+  <section class="panel" aria-labelledby="cond-h">
+    <div id="status-block">
+      <p class="asof" id="asof"></p>
+      <h1 id="cond-h" class="cond-word">Is your power out?</h1>
+      <p class="place" id="place"></p>
+      <p class="detail" id="detail">Check any ZIP or address across PG&amp;E's Northern and Central California territory. No account.</p>
+    </div>
+    <div class="panel-map">
+      <div id="map" role="img" aria-label="Map of PG&amp;E outages across Northern and Central California"></div>
+    </div>
+    <div id="detail-block"></div>
+  </section>
+
+  <div id="nearby-block"></div>
+
+  <section class="alerts" id="alerts" aria-labelledby="al-h">
+    <h2 id="al-h">Get an alert when this changes</h2>
+    <p>A notification when an outage starts, when the estimate moves, and when power is back. Free, no account.</p>
+    <button id="push-btn" class="btn btn-ink" type="button">Turn on browser alerts</button>
+    <p id="push-status" class="push-status"></p>
+  </section>
+
+  <section class="how" aria-labelledby="how-h">
+    <div class="sec-head"><h2 id="how-h">How OutageWatch works</h2></div>
+    <div class="how-list">
+      <div class="how-item">
+        <h3>Only what matters</h3>
+        <p>Alerts fire when an outage starts, when the estimate moves, and when power returns. An address only alerts if the outage actually reaches it.</p>
+      </div>
+      <div class="how-item">
+        <h3>Plain-language answers</h3>
+        <p>Each outage gets a short, calm explanation of what is going on and when power is expected back, drawn from the real feed.</p>
+      </div>
+      <div class="how-item">
+        <h3>No account, no ads</h3>
+        <p>Free to use. No sign-up, no tracking. Your saved area stays on your device.</p>
+      </div>
     </div>
   </section>
 
-  <section class="section getapp" id="get">
-    <h2>Get OutageWatch</h2>
-    <p class="getapp-lead">Free, no account, no ads. Watch your area from your phone, or right here in the browser.</p>
-    <div class="platforms">
-      <div class="platform">
-        <div class="platform-head">
-          <span class="pi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18a.4.4 0 10-.7-.4l-1.87 3.24a11.5 11.5 0 00-9.74 0L5.26 5.9a.4.4 0 10-.7.4L6.4 9.48A10.8 10.8 0 001 18h22a10.8 10.8 0 00-5.4-8.52zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z"/></svg></span>
-          <span class="chip chip-on">Available now</span>
-        </div>
+  <section class="getapp" id="get" aria-labelledby="app-h">
+    <div class="sec-head">
+      <h2 id="app-h">Get the app</h2>
+      <p>Outage alerts on your phone, free and without an account.</p>
+    </div>
+    <div class="app-row">
+      <div class="app-card">
         <h3>Android</h3>
-        <p>Install the signed APK direct from GitHub. It updates itself in place.</p>
-        <a class="platform-cta" href="https://github.com/nicglazkov/outagewatch/releases/latest" target="_blank" rel="noopener">Download APK</a>
+        <p>Available now. Installs and updates in place.</p>
+        <a class="btn btn-ink" href="https://github.com/nicglazkov/outagewatch/releases/latest" target="_blank" rel="noopener">Download APK</a>
+        <p class="app-note">The first time you open it, Android may warn that it has not seen this developer. Tap More details, then Install anyway. It goes away once the app is on the Play Store.</p>
       </div>
-      <div class="platform">
-        <div class="platform-head">
-          <span class="pi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-3.09 2.52-4.57 2.63-4.64-1.43-2.1-3.66-2.39-4.45-2.42-1.9-.19-3.7 1.12-4.66 1.12-.96 0-2.44-1.09-4.01-1.06-2.07.03-3.97 1.2-5.03 3.05-2.14 3.72-.55 9.23 1.53 12.25 1.02 1.48 2.24 3.14 3.83 3.08 1.54-.06 2.12-.99 3.98-.99 1.86 0 2.38.99 4 .96 1.65-.03 2.7-1.5 3.71-2.99 1.17-1.71 1.65-3.37 1.68-3.46-.04-.02-3.22-1.24-3.25-4.93zM14.6 4.5c.85-1.03 1.42-2.46 1.26-3.88-1.22.05-2.7.81-3.58 1.84-.79.91-1.48 2.37-1.29 3.76 1.36.11 2.75-.69 3.61-1.72z"/></svg></span>
-          <span class="chip">August 2026</span>
-        </div>
+      <div class="app-card app-soon">
         <h3>iPhone</h3>
-        <p>The native iOS app arrives on the App Store this summer.</p>
-        <span class="platform-cta ghost">App Store soon</span>
+        <p>Native app on the App Store, August 2026.</p>
+        <span class="btn btn-soon" aria-disabled="true">App Store soon</span>
       </div>
-      <div class="platform">
-        <div class="platform-head">
-          <span class="pi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 2.6v18.8a1 1 0 001.5.87l16.3-9.4a1 1 0 000-1.74L5.5 1.73A1 1 0 004 2.6z"/></svg></span>
-          <span class="chip">August 2026</span>
-        </div>
+      <div class="app-card app-soon">
         <h3>Google Play</h3>
-        <p>The Play Store listing lands alongside the iOS launch.</p>
-        <span class="platform-cta ghost">Play Store soon</span>
+        <p>The Play Store listing, August 2026.</p>
+        <span class="btn btn-soon" aria-disabled="true">Play Store soon</span>
       </div>
     </div>
-    <p class="getapp-foot">No install needed either way: this page gives you the same live status and alerts.</p>
   </section>
 
-  <section class="section faq">
-    <h2>Questions</h2>
-    <details><summary>Is this an official PG&amp;E service?</summary><p>No. OutageWatch is not affiliated with PG&amp;E. It reads PG&amp;E's public outage map and can lag behind reality. For emergencies call 911. Report downed power lines to PG&amp;E at 1-800-743-5000.</p></details>
-    <details><summary>Is it free?</summary><p>Yes, completely free, with no account and no ads.</p></details>
-    <details><summary>How accurate are the restoration times?</summary><p>They come from PG&amp;E's feed and can change or slip. We show them as given and flag when an estimate has already passed.</p></details>
-    <details><summary>Do you track me?</summary><p>No analytics, no tracking cookies, no ads. See the <a href="/privacy">Privacy Policy</a>.</p></details>
-  </section>
 </main>
 
-<footer><div class="wrap">
-  <nav>
-    <a href="/statewide">Statewide map</a>
-    <a href="/privacy">Privacy</a>
-    <a href="/terms">Terms</a>
-    <a href="https://github.com/nicglazkov/outagewatch" target="_blank" rel="noopener">Source on GitHub</a>
-  </nav>
-  <p style="margin:0">Not affiliated with PG&amp;E. Data comes from PG&amp;E's public outage map and can lag. For emergencies call 911; report downed lines to PG&amp;E at 1-800-743-5000.</p>
-</div></footer>
+<footer>
+  <div class="wrap">
+    <p class="disc">Not affiliated with PG&amp;E. Data comes from PG&amp;E's public outage map and can lag. For emergencies call 911. To report a downed power line, call PG&amp;E at 1-800-743-5000.</p>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="/statewide">Statewide map</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="https://github.com/nicglazkov/outagewatch" target="_blank" rel="noopener">Source on GitHub</a>
+    </nav>
+    <p class="foot-brand">OutageWatch</p>
+  </div>
+</footer>
 
 <div class="modal-back" id="modal-back">
   <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div>
