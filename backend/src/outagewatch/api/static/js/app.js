@@ -410,8 +410,16 @@
   function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
   function enablePush() {
     var V = "https://www.gstatic.com/firebasejs/10.12.2/";
-    Promise.all([loadScript(V + "firebase-app-compat.js"), loadScript(V + "firebase-messaging-compat.js")])
-      .then(function () { return firebase.messaging.isSupported(); })
+    // Load app-compat FIRST, then messaging-compat. In parallel they race:
+    // messaging-compat can run before app-compat registers, which throws an
+    // internal error and leaves firebase.messaging undefined.
+    loadScript(V + "firebase-app-compat.js")
+      .then(function () { return loadScript(V + "firebase-messaging-compat.js"); })
+      .then(function () {
+        // isSupported is a static that a few versions/environments lack; guard it
+        // so a missing method never throws before we even try.
+        return (firebase.messaging && firebase.messaging.isSupported) ? firebase.messaging.isSupported() : true;
+      })
       .then(function (supported) {
         // Safari private mode and a few browsers report unsupported here.
         if (!supported) throw { kind: "unsupported" };
