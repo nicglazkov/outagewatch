@@ -17,12 +17,15 @@
  * governed by FCM and the backend, not by keeping them secret.
  */
 window.OW_FIREBASE = {
-  apiKey: "PASTE_WEB_API_KEY",
+  apiKey: "AIzaSyCygllgB-gpT3i-HziyRJFYpagq-yNlSEg",
   authDomain: "outagewatch.firebaseapp.com",
   projectId: "outagewatch",
   storageBucket: "outagewatch.firebasestorage.app",
   messagingSenderId: "468206169285",
-  appId: "PASTE_WEB_APP_ID",
+  appId: "1:468206169285:web:9c95356bf92a9d3ab994ac",
 };
+// The one value that can only come from the Firebase console:
+// Project settings -> Cloud Messaging -> Web Push certificates -> Generate key
+// pair, then paste the public key here and flip OW_PUSH_ENABLED to true.
 window.OW_VAPID_KEY = "PASTE_VAPID_PUBLIC_KEY";
 window.OW_PUSH_ENABLED = false;
