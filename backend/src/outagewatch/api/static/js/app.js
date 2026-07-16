@@ -3,7 +3,7 @@
   "use strict";
   var API = "";
   var $ = function (s) { return document.querySelector(s); };
-  var state = { area: null, outages: [], center: null, territory: null, map: null, mapReady: false, timer: null, lastFetch: null };
+  var state = { area: null, outages: [], statewide: [], center: null, territory: null, map: null, mapReady: false, timer: null, lastFetch: null };
 
   // Map colors read on both light (positron) and dark tiles.
   var C_OUT = "#dd4b2e", C_PSPS = "#e0913a", C_ME = "#2b5fd0";
@@ -87,19 +87,20 @@
     if (/^\d{5}$/.test(z)) { checkZip(z); }
   });
 
-  function checkZip(zip) {
+  function checkZip(zip, isAuto) {
     setLoading();
     save("ow_last", JSON.stringify({ zip: zip }));
     state.area = { zip: zip };
     state.center = null;
     state.territory = null;
-    // The centroid and the outages load independently; whichever lands first,
-    // syncMap() reconciles the camera and overlays, so the map never depends on
-    // the order they resolve (the old blank-map race).
+    // The centroid says where to fly; the outages fill the list. They load
+    // independently, and either order is fine: the map already shows the
+    // statewide set and only flies once the centroid lands.
     fetch(API + "/v1/zips/" + zip).then(function (r) { return r.ok ? r.json() : null; }).then(function (info) {
       state.center = info ? { lat: info.lat, lon: info.lon } : null;
       state.territory = info;
-      syncMap();
+      drawOutages();
+      if (!isAuto) flyToSearch();
       renderTerritoryNotice();
     }).catch(function () {});
     fetch(API + "/v1/outages?zip=" + zip)
@@ -178,11 +179,12 @@
     }, { timeout: 10000, maximumAge: 60000 });
   });
 
-  function checkPoint(lat, lon, zip) {
+  function checkPoint(lat, lon, zip, isAuto) {
     setLoading();
     state.center = { lat: lat, lon: lon };
     state.territory = null;
-    syncMap();
+    drawOutages();
+    if (!isAuto) flyToSearch();
     save("ow_last", JSON.stringify({ lat: lat, lon: lon, name: state.area && state.area.name }));
     fetch(API + "/v1/outages?lat=" + lat + "&lon=" + lon + "&radius_km=8&include_geometry=true")
       .then(function (r) { if (!r.ok) throw 0; return r.json(); })
@@ -205,7 +207,7 @@
     $("#result").textContent = "";
     $("#result").appendChild(el("div", "notice", m));
     state.outages = [];
-    syncMap();
+    drawOutages();
   }
 
   function renderTerritoryNotice() {
@@ -268,7 +270,7 @@
       r.appendChild(el("p", "freshness", "Updated " + ago(state.lastFetch) + ". Data from PG&E, can lag."));
     }
     renderTerritoryNotice();
-    syncMap();
+    drawOutages();
     scheduleRefresh();
   }
 
@@ -286,44 +288,63 @@
     state.map = map;
     map.on("load", function () {
       map.addSource("p", { type: "geojson", data: empty() });
-      map.addLayer({ id: "pf", type: "fill", source: "p", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.28 } });
-      map.addLayer({ id: "pl", type: "line", source: "p", paint: { "line-color": ["get", "color"], "line-width": 2 } });
+      map.addLayer({ id: "pf", type: "fill", source: "p", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.22 } });
+      map.addLayer({ id: "pl", type: "line", source: "p", paint: { "line-color": ["get", "color"], "line-width": 1.5 } });
       map.addSource("pt", { type: "geojson", data: empty() });
-      map.addLayer({ id: "ptc", type: "circle", source: "pt", paint: { "circle-radius": 7, "circle-color": ["get", "color"], "circle-opacity": 0.82, "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
+      map.addLayer({
+        id: "ptc", type: "circle", source: "pt", paint: {
+          // Small when zoomed out to the whole territory, larger up close, so the
+          // statewide view reads like the full statewide map, not a wall of blobs.
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 3, 12, 7],
+          "circle-color": ["get", "color"], "circle-opacity": 0.85,
+          "circle-stroke-width": 1.5, "circle-stroke-color": "#fff"
+        }
+      });
       map.addSource("me", { type: "geojson", data: empty() });
       map.addLayer({ id: "mec", type: "circle", source: "me", paint: { "circle-radius": 6, "circle-color": C_ME, "circle-stroke-width": 3, "circle-stroke-color": "#fff" } });
-      map.on("click", "ptc", function (e) { var id = e.features[0].properties.id; var o = state.outages.filter(function (x) { return x.id === id; })[0]; if (o) openDetail(o); });
+      map.on("click", "ptc", function (e) { var o = findOutage(e.features[0].properties.id); if (o) openDetail(o); });
       map.on("mouseenter", "ptc", function () { map.getCanvas().style.cursor = "pointer"; });
       map.on("mouseleave", "ptc", function () { map.getCanvas().style.cursor = ""; });
       state.mapReady = true;
-      syncMap();
+      drawOutages();
+      loadStatewide();
+      if (state.center) flyToSearch();
     });
   }
 
-  function syncMap() {
+  // Every current outage across PG&E territory, so the mini map shows the same
+  // set as the full statewide map when you zoom out. A search flies in on top.
+  function loadStatewide() {
+    fetch(API + "/v1/statewide?include_geometry=true")
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (list) { state.statewide = list || []; drawOutages(); })
+      .catch(function () {});
+  }
+  function findOutage(id) {
+    var all = state.statewide.concat(state.outages);
+    for (var i = 0; i < all.length; i++) { if (all[i].id === id) return all[i]; }
+    return null;
+  }
+  // Draw the statewide outages plus the you-are-here marker. Never moves the
+  // camera, so the periodic refresh can't yank the map while you are panning it.
+  function drawOutages() {
     var map = state.map;
     if (!map || !state.mapReady) return;
-    var polys = [], pts = [], bounds = new maplibregl.LngLatBounds(), have = false;
-    if (state.center) { bounds.extend([state.center.lon, state.center.lat]); have = true; }
-    state.outages.forEach(function (o) {
+    var polys = [], pts = [];
+    state.statewide.forEach(function (o) {
       var color = o.is_psps ? C_PSPS : C_OUT;
-      if (o.geometry) { polys.push({ type: "Feature", properties: { color: color }, geometry: o.geometry }); walk(o.geometry, function (x, y) { bounds.extend([x, y]); have = true; }); }
-      if (o.lat != null && o.lon != null) { pts.push({ type: "Feature", properties: { color: color, id: o.id }, geometry: { type: "Point", coordinates: [o.lon, o.lat] } }); bounds.extend([o.lon, o.lat]); have = true; }
+      if (o.geometry) polys.push({ type: "Feature", properties: { color: color }, geometry: o.geometry });
+      if (o.lat != null && o.lon != null) pts.push({ type: "Feature", properties: { color: color, id: o.id }, geometry: { type: "Point", coordinates: [o.lon, o.lat] } });
     });
     map.getSource("p").setData({ type: "FeatureCollection", features: polys });
     map.getSource("pt").setData({ type: "FeatureCollection", features: pts });
     map.getSource("me").setData(state.center ? { type: "Feature", geometry: { type: "Point", coordinates: [state.center.lon, state.center.lat] } } : empty());
-    if (!state.center) { return; }
-    if (state.outages.length && have) {
-      try { map.fitBounds(bounds, { padding: 60, maxZoom: 13, duration: 600 }); return; } catch (e) {}
-    }
-    map.flyTo({ center: [state.center.lon, state.center.lat], zoom: 11, duration: 600 });
   }
-  function walk(g, cb) {
-    var c = g.coordinates;
-    if (g.type === "Polygon") c.forEach(function (r) { r.forEach(function (p) { cb(p[0], p[1]); }); });
-    else if (g.type === "MultiPolygon") c.forEach(function (poly) { poly.forEach(function (r) { r.forEach(function (p) { cb(p[0], p[1]); }); }); });
-    else if (g.type === "Point") cb(c[0], c[1]);
+  // Fly to a searched area. Only on an explicit search, never on auto-refresh.
+  function flyToSearch() {
+    if (state.map && state.mapReady && state.center) {
+      state.map.flyTo({ center: [state.center.lon, state.center.lat], zoom: 11, duration: 700 });
+    }
   }
 
   // ---------- Detail modal + AI explanation ----------
@@ -368,8 +389,9 @@
   function scheduleRefresh() {
     clearTimeout(state.timer);
     state.timer = setTimeout(function () {
-      if (state.area && state.area.zip) checkZip(state.area.zip);
-      else if (state.area && state.area.lat != null) checkPoint(state.area.lat, state.area.lon, state.area.zip);
+      loadStatewide();
+      if (state.area && state.area.zip) checkZip(state.area.zip, true);
+      else if (state.area && state.area.lat != null) checkPoint(state.area.lat, state.area.lon, state.area.zip, true);
     }, 5 * 60 * 1000);
   }
 

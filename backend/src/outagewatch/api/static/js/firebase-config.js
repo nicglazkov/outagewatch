@@ -27,5 +27,5 @@ window.OW_FIREBASE = {
 // The one value that can only come from the Firebase console:
 // Project settings -> Cloud Messaging -> Web Push certificates -> Generate key
 // pair, then paste the public key here and flip OW_PUSH_ENABLED to true.
-window.OW_VAPID_KEY = "PASTE_VAPID_PUBLIC_KEY";
-window.OW_PUSH_ENABLED = false;
+window.OW_VAPID_KEY = "BLKM-hLgIklv-so3kR8Ghotyw962o7HUt_f80G_5o5mmtWXThxEbaTCrqK60wslR62DgM9GaAyW-Z29YdamgCzs";
+window.OW_PUSH_ENABLED = true;
