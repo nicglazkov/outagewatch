@@ -37,6 +37,38 @@
   function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 
+  // Does an outage actually reach a specific point? A polygon must contain it; a
+  // coordinate-only outage counts only within ~250m. This mirrors the app's
+  // precise-address rule, so an outage that is merely nearby never reads as
+  // "your power is out".
+  function haversineKm(aLat, aLon, bLat, bLon) {
+    var R = 6371, rad = Math.PI / 180;
+    var dLat = (bLat - aLat) * rad, dLon = (bLon - aLon) * rad;
+    var s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+  }
+  function pointInRing(lon, lat, ring) {
+    var inside = false;
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      var xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+      if (((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+  }
+  function polyCovers(rings, lon, lat) {
+    if (!rings.length || !pointInRing(lon, lat, rings[0])) return false;
+    for (var k = 1; k < rings.length; k++) { if (pointInRing(lon, lat, rings[k])) return false; }
+    return true;
+  }
+  function impacts(o, lat, lon) {
+    var g = o.geometry;
+    if (g && g.type === "Polygon") return polyCovers(g.coordinates, lon, lat);
+    if (g && g.type === "MultiPolygon") return g.coordinates.some(function (p) { return polyCovers(p, lon, lat); });
+    if (o.lat != null && o.lon != null) return haversineKm(lat, lon, o.lat, o.lon) <= 0.25;
+    return false;
+  }
+
   // ---------- mode tabs ----------
   document.querySelectorAll(".tab").forEach(function (t) {
     t.addEventListener("click", function () {
@@ -191,9 +223,23 @@
     state.lastFetch = Date.now();
     var name = areaName();
     var out = state.outages.length;
-    if (out) {
-      setStatus([{ t: "Power is " }, { t: "out", cls: "out" }, { t: " near " + name + "." }],
-        out + (out === 1 ? " outage" : " outages") + " reported by PG&E.");
+    // "Power is out" is only honest for an exact address an outage actually
+    // covers. A ZIP is an area, and an outage that is merely nearby is not your
+    // outage, so those read as "likely on, outage nearby" and steer you to the
+    // precise address check.
+    var precise = !!(state.area && state.area.precise && state.center);
+    var covering = precise
+      ? state.outages.filter(function (o) { return impacts(o, state.center.lat, state.center.lon); })
+      : [];
+    if (precise && covering.length) {
+      setStatus([{ t: "Power is " }, { t: "out", cls: "out" }, { t: " at " + name + "." }],
+        covering.length === 1 ? "An outage is affecting this address." : covering.length + " outages are affecting this address.");
+    } else if (precise) {
+      setStatus([{ t: "Power is likely " }, { t: "on", cls: "clear" }, { t: " at " + name + "." }],
+        out ? out + (out === 1 ? " outage" : " outages") + " reported nearby, but none reaching this address." : "No outages near this address right now.");
+    } else if (out) {
+      setStatus([{ t: "Power is likely " }, { t: "on", cls: "clear" }, { t: " near " + name + "." }],
+        out + (out === 1 ? " outage" : " outages") + " reported nearby. Enter your street address to see if yours is affected.");
     } else {
       setStatus([{ t: "No outages", cls: "clear" }, { t: " near " + name + "." }],
         "PG&E reports nothing in this area right now.");
@@ -202,7 +248,7 @@
     var r = $("#result"); r.textContent = "";
     if (out) {
       var box = el("div", "outages");
-      box.appendChild(el("h2", null, out === 1 ? "The outage" : "The outages"));
+      box.appendChild(el("h2", null, (precise && covering.length) ? (covering.length === 1 ? "The outage" : "The outages") : "Nearby outages"));
       state.outages.slice(0, 20).forEach(function (o) {
         var row = el("button", "orow" + (o.is_psps ? " psps" : ""));
         row.type = "button";
