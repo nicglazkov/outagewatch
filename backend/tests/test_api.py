@@ -307,6 +307,20 @@ def test_web_pages_and_workers_served(client):
     assert c.get("/static/manifest.webmanifest").status_code == 200
 
 
+def test_page_assets_are_cache_busted(client):
+    # Page HTML is served no-cache with a content-hash pinned onto local CSS/JS
+    # URLs, so an updated stylesheet can never be masked by a stale cached copy.
+    c, _ = client
+    resp = c.get("/")
+    assert "no-cache" in resp.headers.get("cache-control", "")
+    ver = api_main._ASSET_VER
+    assert len(ver) == 8
+    assert f"/static/css/app.css?v={ver}" in resp.text
+    assert f"/static/js/app.js?v={ver}" in resp.text
+    # external SRI-pinned CDN assets must not be rewritten
+    assert "maplibre-gl@4.7.1/dist/maplibre-gl.css?v=" not in resp.text
+
+
 def test_slo_is_rate_limited(client):
     c, _ = client
     # /v1/slo hits Firestore per call, so it must be throttled like other reads.

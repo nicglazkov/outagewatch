@@ -8,8 +8,10 @@ Two Cloud Run services run this same app:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+import re
 import time
 import uuid
 from datetime import datetime
@@ -18,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -209,8 +211,32 @@ async def healthz() -> dict[str, str]:
 _STATIC = Path(__file__).parent / "static"
 
 
-def _page(name: str) -> FileResponse:
-    return FileResponse(_STATIC / name)
+def _asset_version() -> str:
+    """A short content hash of every CSS/JS file, so page HTML can pin its
+    asset URLs to it. When any CSS or JS changes, the hash changes, the URL
+    changes, and browsers fetch the new file instead of a stale cached copy."""
+    h = hashlib.md5()
+    for sub in ("css", "js"):
+        d = _STATIC / sub
+        if d.is_dir():
+            for f in sorted(d.rglob("*")):
+                if f.is_file():
+                    h.update(f.read_bytes())
+    return h.hexdigest()[:8]
+
+
+_ASSET_VER = _asset_version()
+# Append ?v=<hash> to local /static css/js references (not external, SRI-pinned CDN).
+_ASSET_RE = re.compile(r'((?:href|src)="/static/[^"]+\.(?:css|js))"')
+
+
+def _page(name: str) -> Response:
+    # Serve page HTML as no-cache with cache-busted asset URLs: the HTML itself
+    # is always revalidated (small), while the versioned CSS/JS URLs guarantee a
+    # fresh fetch whenever those files change.
+    html = (_STATIC / name).read_text(encoding="utf-8")
+    html = _ASSET_RE.sub(rf'\1?v={_ASSET_VER}"', html)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
 def _worker(name: str) -> FileResponse:
