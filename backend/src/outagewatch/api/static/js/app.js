@@ -222,7 +222,7 @@
   }
   function showMsg(m) {
     $("#asof").textContent = "";
-    setCond([{ t: "Is your power out?" }]);
+    setCond([]);
     $("#place").textContent = "";
     $("#detail").textContent = "";
     $("#detail-block").textContent = "";
