@@ -65,9 +65,13 @@ header.site { border-bottom: 1px solid var(--line-soft); background: var(--groun
 }
 .finder-row:focus-within { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(32,36,42,0.13), 0 12px 28px rgba(32,36,42,0.08); }
 .finder-row input {
-  flex: 1 1 auto; min-width: 0; font: inherit; font-size: 1.08rem; color: var(--ink);
+  flex: 1 1 auto; min-width: 0; width: 100%; font: inherit; font-size: 1.08rem; color: var(--ink);
   background: transparent; border: 0; padding: 17px 20px; min-height: 60px;
 }
+/* the address input sits inside the .ac autocomplete wrapper, so it is not a
+   direct flex child of the bar; make it fill the wrapper or its placeholder
+   clips at the default input width instead of at the bar edge. */
+.finder-row .ac { display: flex; }
 .finder-row input:focus { outline: none; }
 .finder-row input::placeholder { color: #8b8f97; }
 .finder-go {
