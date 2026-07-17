@@ -24,12 +24,7 @@
 
 <header class="site"><div class="wrap site-inner">
   <a class="brand" href="/" aria-label="OutageWatch home">
-    <span class="brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 26 26" width="26" height="26" fill="none">
-        <circle cx="13" cy="13" r="12" fill="#20242a"/>
-        <path d="M14.2 5.5 8.2 14.1h4.1l-1.3 6.4 6.1-8.7h-4.2l1.3-6.3Z" fill="#c0562a"/>
-      </svg>
-    </span>
+    <img class="brand-mark" src="/static/icons/icon-192.png" width="26" height="26" alt="" aria-hidden="true">
     OutageWatch
   </a>
   <nav class="nav" aria-label="Primary">
@@ -40,35 +35,39 @@
 
 <main class="wrap">
 
-  <section class="search" aria-label="Check an area">
-    <p class="search-title">Check your address or ZIP</p>
-    <div class="modes" role="tablist" aria-label="Search by">
-      <button type="button" class="tab" data-mode="zip" role="tab" aria-selected="true">ZIP code</button>
-      <button type="button" class="tab" data-mode="address" role="tab" aria-selected="false">Address</button>
-    </div>
-    <form id="zip-form" class="search-row">
-      <label for="zip-input" class="visually-hidden">ZIP code</label>
-      <input id="zip-input" type="text" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"
-             placeholder="ZIP code, e.g. 95404" autocomplete="postal-code">
-      <button type="submit" class="btn btn-ink">Check</button>
-    </form>
-    <form id="addr-form" class="search-row hidden">
-      <label for="addr-input" class="visually-hidden">Street address</label>
-      <div class="ac">
-        <input id="addr-input" type="text" placeholder="Street address or place" autocomplete="off" aria-autocomplete="list">
-        <div id="addr-list" class="ac-list hidden" role="listbox" aria-label="Address suggestions"></div>
+  <section class="hero" aria-labelledby="hero-h">
+    <h1 id="hero-h" class="hero-title">Is your power out?</h1>
+    <p class="hero-sub">Check any ZIP or address across PG&amp;E's Northern and Central California territory. Free, no account.</p>
+
+    <div class="finder" role="search">
+      <div class="modes" role="tablist" aria-label="Search by">
+        <button type="button" class="tab" data-mode="zip" role="tab" aria-selected="true">ZIP code</button>
+        <button type="button" class="tab" data-mode="address" role="tab" aria-selected="false">Address</button>
       </div>
-      <button type="submit" class="btn btn-ink">Check</button>
-    </form>
-    <div class="locate"><button id="locate-btn" type="button">Use my current location</button></div>
+      <form id="zip-form" class="finder-row">
+        <label for="zip-input" class="visually-hidden">ZIP code</label>
+        <input id="zip-input" type="text" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"
+               placeholder="Enter a ZIP code, e.g. 95404" autocomplete="postal-code">
+        <button type="submit" class="finder-go">Check</button>
+      </form>
+      <form id="addr-form" class="finder-row hidden">
+        <label for="addr-input" class="visually-hidden">Street address</label>
+        <div class="ac">
+          <input id="addr-input" type="text" placeholder="Enter a street address or place" autocomplete="off" aria-autocomplete="list">
+          <div id="addr-list" class="ac-list hidden" role="listbox" aria-label="Address suggestions"></div>
+        </div>
+        <button type="submit" class="finder-go">Check</button>
+      </form>
+      <button id="locate-btn" type="button" class="locate-btn">Use my current location</button>
+    </div>
   </section>
 
-  <section class="panel" aria-labelledby="cond-h">
+  <section class="panel" aria-label="Outage status and live map">
     <div id="status-block">
       <p class="asof" id="asof"></p>
-      <h1 id="cond-h" class="cond-word">Is your power out?</h1>
+      <div id="cond-h" class="cond-word" aria-live="polite"></div>
       <p class="place" id="place"></p>
-      <p class="detail" id="detail">Check any ZIP or address across PG&amp;E's Northern and Central California territory. No account.</p>
+      <p class="detail" id="detail">A live map of PG&amp;E outages across Northern and Central California. Check your ZIP or address above for restoration times at a specific place.</p>
     </div>
     <div class="panel-map">
       <div id="map" role="img" aria-label="Map of PG&amp;E outages across Northern and Central California"></div>
