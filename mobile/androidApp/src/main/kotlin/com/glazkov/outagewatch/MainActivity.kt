@@ -10,6 +10,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.glazkov.outagewatch.data.DeviceLocation
 import com.glazkov.outagewatch.location.AndroidLocationFinder
 import com.glazkov.outagewatch.ui.App
@@ -17,6 +22,8 @@ import com.glazkov.outagewatch.ui.AppGraph
 import com.glazkov.outagewatch.ui.AppInfo
 import com.glazkov.outagewatch.ui.ExternalLinks
 import com.glazkov.outagewatch.ui.PendingOutage
+import com.glazkov.outagewatch.update.UpdateCheckWorker
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -40,8 +47,13 @@ class MainActivity : ComponentActivity() {
         }
         // A notification tap launches us with this extra; let the UI open it.
         intent?.getStringExtra(EXTRA_OUTAGE_ID)?.let { PendingOutage.id.value = it }
-        // Heal any subscription that couldn't register earlier (offline / no token).
-        lifecycleScope.launch { AppGraph.locations.retryMissingSubscriptions() }
+        lifecycleScope.launch {
+            // One-time: switch existing watches to address-only so the app stops
+            // sending "outage nearby" pushes; then heal any un-registered subs.
+            AppGraph.locations.migrateAreaAlertsOff()
+            AppGraph.locations.retryMissingSubscriptions()
+        }
+        scheduleUpdateChecks()
         setContent {
             App()
         }
@@ -51,6 +63,19 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         intent.getStringExtra(EXTRA_OUTAGE_ID)?.let { PendingOutage.id.value = it }
+    }
+
+    /** Check GitHub for a newer release about twice a day, in the background, so
+     *  a new version can raise a notification even when the app isn't open. */
+    private fun scheduleUpdateChecks() {
+        val work = PeriodicWorkRequestBuilder<UpdateCheckWorker>(12, TimeUnit.HOURS)
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+            )
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            UpdateCheckWorker.WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, work,
+        )
     }
 
     companion object {

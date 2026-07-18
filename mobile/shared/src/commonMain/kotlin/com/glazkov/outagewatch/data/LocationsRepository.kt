@@ -23,9 +23,14 @@ data class SavedLocation(
     val lon: Double,
     val radiusKm: Double,
     val precise: Boolean = false, // true = an individual address, not a ZIP region
+    // When false (the default), this place alerts ONLY when an outage actually
+    // covers its point. When true, it also alerts for outages nearby (the wider
+    // area). Area alerts are opt-in: address = off, a saved ZIP = on.
+    val areaAlerts: Boolean = false,
     val subscriptionId: String? = null,
 ) {
     // Stable key; two precise addresses can share a ZIP, so include the point.
+    // Independent of areaAlerts, so toggling nearby alerts keeps the same place.
     val id: String get() = if (precise) "$zip@$lat,$lon" else zip
 }
 
@@ -80,6 +85,37 @@ class LocationsRepository(
                 lon = info.lon,
                 radiusKm = info.radiusKm,
                 precise = false,
+                // Choosing a whole ZIP is itself the explicit request for area
+                // alerts, so this is the one add path that turns them on.
+                areaAlerts = true,
+            )
+        )
+    }
+
+    /**
+     * Add the device's current position as a precise address: it alerts only
+     * when an outage covers that point, never merely nearby. This is the primary
+     * "watch my home" path, so it defaults to address-only (area alerts off).
+     */
+    suspend fun addCurrentLocation(
+        lat: Double,
+        lon: Double,
+        zip: String,
+        label: String,
+        force: Boolean = false,
+    ): AddOutcome {
+        // Territory check is best-effort; the GPS point is already valid.
+        val info = runCatching { api.zipInfo(zip) }.getOrNull()
+        info?.servedBy?.let { if (!force) return AddOutcome.NotServed(it) }
+        return commit(
+            SavedLocation(
+                zip = zip,
+                label = cleanLabel(label, "Home"),
+                lat = lat,
+                lon = lon,
+                radiusKm = 2.0,
+                precise = true,
+                areaAlerts = false,
             )
         )
     }
@@ -165,6 +201,33 @@ class LocationsRepository(
         resubscribeAll()
     }
 
+    /** Turn nearby/area alerts on or off for one saved place, and re-register its
+     *  subscription so the change takes effect immediately. Address-only is off. */
+    suspend fun setAreaAlerts(location: SavedLocation, enabled: Boolean): AddOutcome =
+        commit(location.copy(areaAlerts = enabled))
+
+    /**
+     * One-time upgrade migration: make every existing place address-only (area
+     * alerts off) so the app stops sending "outage nearby" pushes. Places that
+     * were saved as areas (a ZIP, or the old current-location shortcut) keep
+     * their point but now only alert when an outage covers it; the user can turn
+     * area alerts back on per place. Runs once, guarded by a flag.
+     */
+    suspend fun migrateAreaAlertsOff() {
+        if (settings.getBoolean(MIGRATION_KEY, false)) return
+        mutex.withLock {
+            _locations.value = _locations.value.map { loc ->
+                val silenced = loc.copy(areaAlerts = false)
+                silenced.subscriptionId?.let {
+                    runCatching { api.unsubscribe(it, PushTokens.current()) }
+                }
+                silenced.copy(subscriptionId = subscribeFor(silenced))
+            }
+            persist()
+        }
+        settings.putBoolean(MIGRATION_KEY, true)
+    }
+
     /** Push registration is best-effort: without a token the app stays read-only. */
     private suspend fun subscribeFor(location: SavedLocation): String? {
         val token = PushTokens.current() ?: return null
@@ -182,9 +245,10 @@ class LocationsRepository(
                     quietStart = p.quietStart,
                     quietEnd = p.quietEnd,
                     pspsWarnings = p.pspsWarnings,
-                    // A precise address alerts only when an outage covers it; a
-                    // ZIP/region alerts on anything nearby.
-                    precise = location.precise,
+                    // The backend's "precise" means covers-my-point-only. A place
+                    // alerts address-only unless the user turned on area alerts,
+                    // so precise is simply the inverse of areaAlerts.
+                    precise = !location.areaAlerts,
                 )
             ).id
         }.getOrNull()
@@ -234,6 +298,7 @@ class LocationsRepository(
     companion object {
         private const val LOCATIONS_KEY = "saved_locations"
         private const val PREFS_KEY = "alert_prefs"
+        private const val MIGRATION_KEY = "migrated_area_alerts_off_v1"
         private const val NETWORK_ERROR =
             "Couldn't reach OutageWatch. Check your connection and try again."
     }
