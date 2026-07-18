@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchColors
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -137,22 +138,20 @@ fun SettingsScreen(onBack: () -> Unit) {
                     Cell(title = "No locations yet", showSeparator = false)
                 } else {
                     locations.forEachIndexed { i, location ->
-                        Cell(
-                            title = location.label,
-                            subtitle = when {
-                                location.zip.length != 5 -> "Saved address"
-                                location.label == "ZIP ${location.zip}" -> null
-                                else -> "ZIP ${location.zip}"
-                            },
-                            trailing = "Remove",
-                            trailingColor = c.outage,
+                        WatchedLocationRow(
+                            location = location,
+                            switchColors = switchColors,
                             showSeparator = i != locations.lastIndex,
-                            onClick = { pendingRemove = location },
+                            onToggleArea = { on -> scope.launch { repo.setAreaAlerts(location, on) } },
+                            onRemove = { pendingRemove = location },
                         )
                     }
                 }
             }
-            GroupedFootnote("OutageWatch is free and account-less. Not affiliated with PG&E.")
+            GroupedFootnote(
+                "By default a place alerts only when an outage reaches it. Turn on " +
+                    "nearby area alerts to also hear about outages around it.",
+            )
 
             SectionHeader("About")
             GroupedSection {
@@ -191,6 +190,52 @@ fun SettingsScreen(onBack: () -> Unit) {
                 TextButton(onClick = { pendingRemove = null }) { Text("Keep") }
             },
         )
+    }
+}
+
+/**
+ * One watched place: its name and type, a Remove action, and a switch for
+ * nearby/area alerts. Off means it only alerts when an outage covers the place.
+ */
+@Composable
+private fun WatchedLocationRow(
+    location: SavedLocation,
+    switchColors: SwitchColors,
+    showSeparator: Boolean,
+    onToggleArea: (Boolean) -> Unit,
+    onRemove: () -> Unit,
+) {
+    val c = LocalCompass.current
+    Column {
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp, 12.dp, 16.dp, 6.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(location.label, color = c.label, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    if (location.precise) "Address" else "ZIP ${location.zip}",
+                    color = c.secondary, fontSize = 13.sp,
+                )
+            }
+            Text(
+                "Remove", color = c.outage, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                modifier = Modifier.clickable { onRemove() }.padding(start = 12.dp),
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp, 0.dp, 16.dp, 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Nearby area alerts", color = c.label, fontSize = 15.sp)
+                Text("Also alert for outages near here.", color = c.secondary, fontSize = 12.sp)
+            }
+            Switch(location.areaAlerts, onToggleArea, colors = switchColors)
+        }
+        if (showSeparator) {
+            Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(1.dp).background(c.separator))
+        }
     }
 }
 

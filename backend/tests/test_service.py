@@ -132,6 +132,26 @@ async def test_dead_tokens_are_pruned(world):
 
 
 @pytest.mark.asyncio
+async def test_precise_subscriber_only_pushes_when_covered(world):
+    """An address-only (precise) sub is the app's default: it ignores nearby
+    outages and fires only when the outage is essentially at the address."""
+    state, subs, sender, history, slo = world
+    subs.subs.clear()
+    subs.upsert(_sub(sub_id="a1", precise=True))
+    await _run(FakeFeed({}, version="v1"), world)
+
+    # ~1.3 km away: inside the 2 km radius, but not covering the address.
+    nearby = _outage(lat=38.452, lon=-122.71)
+    out1 = await _run(FakeFeed({"o1": nearby}, version="v2"), world)
+    assert out1.pushes_sent == 0
+
+    # A new outage at the address itself: covered, so it does push.
+    at_home = _outage(oid="o2", lat=SANTA_ROSA[0], lon=SANTA_ROSA[1])
+    out2 = await _run(FakeFeed({"o1": nearby, "o2": at_home}, version="v3"), world)
+    assert out2.pushes_sent == 1
+
+
+@pytest.mark.asyncio
 async def test_zip_only_subscriber_matches_via_resolved_point(world):
     """A ZIP sub stored with centroid lat/lon (as the API creates it) matches nearby outages."""
     state, subs, sender, history, slo = world

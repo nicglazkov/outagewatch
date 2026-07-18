@@ -151,7 +151,12 @@ fun AddLocationScreen(onDone: () -> Unit) {
                         when (val r = DeviceLocation.currentZip()) {
                             is LocationResult.Found -> {
                                 locating = false
-                                runAdd({ f -> AppGraph.locations.addZip(r.zip, "Home", f) }, force = false)
+                                // Current location is a precise point, so it alerts
+                                // only when an outage covers it, not merely nearby.
+                                runAdd(
+                                    { f -> AppGraph.locations.addCurrentLocation(r.lat, r.lon, r.zip, "Home", f) },
+                                    force = false,
+                                )
                             }
                             LocationResult.PermissionDenied -> {
                                 locating = false
@@ -178,6 +183,14 @@ fun AddLocationScreen(onDone: () -> Unit) {
                     mode = Mode.Zip; error = null; warnUtility = null; suggestions = emptyList()
                 }
             }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                if (mode == Mode.Address)
+                    "Alerts you only when an outage reaches this address."
+                else
+                    "Alerts you for any outage across this ZIP area.",
+                color = c.secondary, fontSize = 13.sp,
+            )
             Spacer(Modifier.height(14.dp))
 
             val fieldColors = OutlinedTextFieldDefaults.colors(
@@ -247,7 +260,11 @@ fun AddLocationScreen(onDone: () -> Unit) {
                     CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
                 } else {
                     Text(
-                        if (warnUtility != null) "Add anyway" else "Watch this area",
+                        when {
+                            warnUtility != null -> "Add anyway"
+                            mode == Mode.Address -> "Watch this address"
+                            else -> "Watch this area"
+                        },
                         color = if (enabled) Color.White else c.secondary,
                         fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     )

@@ -3,6 +3,7 @@ package com.glazkov.outagewatch.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.glazkov.outagewatch.api.Outage
+import com.glazkov.outagewatch.data.Coverage
 import com.glazkov.outagewatch.data.SavedLocation
 import com.glazkov.outagewatch.ui.AppGraph
 import kotlinx.coroutines.async
@@ -73,12 +74,23 @@ class HomeViewModel : ViewModel() {
             saved.map { location ->
                 async {
                     runCatching {
-                        // Coordinates work for both ZIP regions (centroid) and
-                        // precise addresses (exact point), so one path serves both.
-                        LocationStatus(
-                            location,
-                            api.outagesNear(location.lat, location.lon, location.radiusKm),
-                        )
+                        if (location.areaAlerts) {
+                            // Area alerts on: "out" when an outage is anywhere nearby.
+                            LocationStatus(
+                                location,
+                                api.outagesNear(location.lat, location.lon, location.radiusKm),
+                            )
+                        } else {
+                            // Address-only: "out" only when an outage actually covers
+                            // the point, matching exactly what this place alerts on.
+                            val near = api.outagesNear(
+                                location.lat, location.lon, location.radiusKm, includeGeometry = true,
+                            )
+                            LocationStatus(
+                                location,
+                                near.filter { Coverage.impacts(it, location.lat, location.lon) },
+                            )
+                        }
                     }.getOrElse { LocationStatus(location, error = true) }
                 }
             }.awaitAll()

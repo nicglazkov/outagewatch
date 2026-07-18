@@ -36,7 +36,7 @@ class AndroidLocationFinder(private val activity: ComponentActivity) : LocationF
         }
         val location = lastLocation() ?: return LocationResult.Unavailable
         val zip = reverseGeocodeZip(location) ?: return LocationResult.Unavailable
-        return LocationResult.Found(zip)
+        return LocationResult.Found(location.latitude, location.longitude, zip)
     }
 
     override suspend fun geocodeAddress(query: String): GeoResult? {

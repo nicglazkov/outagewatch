@@ -23,6 +23,7 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.firebase.messaging)
+    implementation(libs.androidx.work.runtime)
 }
 
 android {
@@ -33,8 +34,8 @@ android {
         applicationId = "com.glazkov.outagewatch"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 6
-        versionName = "0.2.4"
+        versionCode = 7
+        versionName = "0.2.5"
 
         buildConfigField("String", "FIREBASE_APP_ID", "\"${prop("FIREBASE_APP_ID")}\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"${prop("FIREBASE_API_KEY")}\"")

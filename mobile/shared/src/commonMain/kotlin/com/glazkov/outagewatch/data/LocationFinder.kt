@@ -1,8 +1,10 @@
 package com.glazkov.outagewatch.data
 
-/** Result of a one-tap "use my current location" request. */
+/** Result of a one-tap "use my current location" request. Carries the exact
+ *  GPS point (not just the ZIP) so the current location can be saved as a
+ *  precise address that alerts only when an outage actually covers it. */
 sealed interface LocationResult {
-    data class Found(val zip: String) : LocationResult
+    data class Found(val lat: Double, val lon: Double, val zip: String) : LocationResult
     data object PermissionDenied : LocationResult
     data object Unavailable : LocationResult
 }
