@@ -53,3 +53,22 @@ class FcmSender:
         except Exception:
             logger.exception("FCM send failed (transient) %s", _tok(message.token))
             return True  # transient: do not treat the token as dead
+
+    async def validate(self, token: str) -> bool:
+        """Dry-run send to check a token without delivering anything. Returns
+        False only when FCM says the token is permanently dead/invalid, so the
+        prune sweep can drop junk tokens that never receive a real push. A
+        transient error returns True (keep the token)."""
+        from firebase_admin import exceptions as fb_exceptions
+        from firebase_admin import messaging
+
+        msg = messaging.Message(token=token, data={"ping": "1"})
+        try:
+            await asyncio.to_thread(messaging.send, msg, dry_run=True)
+            return True
+        except (messaging.UnregisteredError, messaging.SenderIdMismatchError,
+                fb_exceptions.InvalidArgumentError):
+            return False
+        except Exception:
+            logger.exception("FCM validate failed (transient) %s", _tok(token))
+            return True

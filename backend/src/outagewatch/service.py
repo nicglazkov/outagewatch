@@ -7,8 +7,9 @@ production entrypoint wires GCS/Firestore/FCM.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
@@ -146,6 +147,40 @@ async def poll_once(
     for token in set(outcome.dead_tokens):
         subs.delete_by_token(token)
 
+    return outcome
+
+
+@dataclass
+class PruneOutcome:
+    ran: bool = False
+    checked: int = 0
+    pruned: int = 0
+
+
+async def prune_stale_subscriptions(
+    subs: SubscriptionSource,
+    validate: Callable[[str], Awaitable[bool]],
+    *,
+    last_run: datetime | None,
+    now: datetime,
+    min_interval: timedelta = timedelta(days=1),
+) -> PruneOutcome:
+    """Drop subscriptions whose FCM token is permanently invalid but that a real
+    push never reaches (junk placed in areas that never have an outage, so the
+    reactive dead-token pruning in poll_once never sees them). Validates each
+    unique token with a dry-run send and deletes the dead ones. Bounded to one
+    run per `min_interval` via the injected `last_run`, so it is cheap even if
+    many junk tokens accumulate.
+    """
+    if last_run is not None and now - last_run < min_interval:
+        return PruneOutcome(ran=False)
+    tokens = {sub.token for sub in subs.list_all()}
+    outcome = PruneOutcome(ran=True, checked=len(tokens))
+    for token in tokens:
+        if not await validate(token):
+            outcome.pruned += subs.delete_by_token(token)
+    if outcome.pruned:
+        logger.info("pruned %d stale subscription(s)", outcome.pruned)
     return outcome
 
 
