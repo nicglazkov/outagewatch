@@ -14,7 +14,7 @@ import os
 import re
 import time
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -116,7 +116,7 @@ class Deps:
             GcsStateStore,
         )
 
-        self.state = GcsStateStore(cfg.data_bucket)
+        self.state = GcsStateStore(cfg.data_bucket, cfg.record_raw_snapshots)
         self.subs = FirestoreSubscriptionStore(cfg.project_id)
         self.eta_history = FirestoreEtaHistory(cfg.project_id)
         self.slo = FirestoreSloLog(cfg.project_id)
@@ -529,7 +529,7 @@ async def internal_poll(deps: Deps = Depends(get_deps)) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="not found")
     from dataclasses import asdict
 
-    from outagewatch.service import poll_once
+    from outagewatch.service import poll_once, prune_stale_subscriptions
 
     outcome = await poll_once(
         feed=deps.feed,
@@ -539,7 +539,22 @@ async def internal_poll(deps: Deps = Depends(get_deps)) -> dict[str, Any]:
         eta_history=deps.eta_history,
         slo=deps.slo,
     )
-    return asdict(outcome)
+    result = asdict(outcome)
+
+    # Opportunistic once-a-day sweep of junk subscriptions. Non-fatal: a failure
+    # here must never fail the poll itself.
+    try:
+        now = datetime.now(UTC)
+        prune = await prune_stale_subscriptions(
+            deps.subs, deps.sender.validate, last_run=deps.state.last_prune(), now=now
+        )
+        if prune.ran:
+            deps.state.save_prune(now)
+        result["prune"] = asdict(prune)
+    except Exception:
+        logging.getLogger(__name__).exception("subscription prune failed (non-fatal)")
+
+    return result
 
 
 def _parse_dt(value: str | None) -> datetime | None:

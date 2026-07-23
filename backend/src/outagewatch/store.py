@@ -29,10 +29,11 @@ STATE_BLOB = "state/current.json"
 class GcsStateStore:
     """Feed snapshot state + raw recording in a GCS bucket."""
 
-    def __init__(self, bucket_name: str):
+    def __init__(self, bucket_name: str, record_raw_enabled: bool = True):
         from google.cloud import storage
 
         self._bucket = storage.Client().bucket(bucket_name)
+        self._record_raw_enabled = record_raw_enabled
 
     async def load(self) -> Snapshot | None:
         blob = self._bucket.blob(STATE_BLOB)
@@ -48,6 +49,10 @@ class GcsStateStore:
         )
 
     def record_raw(self, version: str, raw_layers: dict[str, Any]) -> None:
+        # Honors RECORD_RAW: when disabled, recording is a no-op so the bucket
+        # does not accumulate raw dumps (a GCS lifecycle rule also caps them).
+        if not self._record_raw_enabled:
+            return
         now = datetime.now(UTC)
         path = f"raw/{now:%Y/%m/%d}/{now:%H%M%S}-{version}.json"
         self._bucket.blob(path).upload_from_string(
@@ -61,6 +66,19 @@ class GcsStateStore:
 
     def save_version(self, version: str) -> None:
         self._bucket.blob("state/version.txt").upload_from_string(version)
+
+    def last_prune(self) -> datetime | None:
+        """When the subscription prune sweep last ran (a small GCS marker)."""
+        blob = self._bucket.blob("state/last_prune.txt")
+        if not blob.exists():
+            return None
+        try:
+            return datetime.fromisoformat(blob.download_as_text().strip())
+        except ValueError:
+            return None
+
+    def save_prune(self, when: datetime) -> None:
+        self._bucket.blob("state/last_prune.txt").upload_from_string(when.isoformat())
 
 
 @dataclass

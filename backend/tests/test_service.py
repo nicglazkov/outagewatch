@@ -1,10 +1,10 @@
 """End-to-end pipeline tests: feed change -> diff -> match -> push, with fakes."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from outagewatch.service import poll_once
+from outagewatch.service import poll_once, prune_stale_subscriptions
 from outagewatch.store import StoredSubscription
 from tests.fakes import FakeEtaHistory, FakeFeed, FakeSender, FakeSlo, FakeStateStore, FakeSubs
 from watcher.types import Item
@@ -149,6 +149,34 @@ async def test_precise_subscriber_only_pushes_when_covered(world):
     at_home = _outage(oid="o2", lat=SANTA_ROSA[0], lon=SANTA_ROSA[1])
     out2 = await _run(FakeFeed({"o1": nearby, "o2": at_home}, version="v3"), world)
     assert out2.pushes_sent == 1
+
+
+@pytest.mark.asyncio
+async def test_prune_removes_invalid_tokens_once_a_day():
+    """The daily sweep drops junk tokens FCM rejects, dedupes by token, and
+    runs at most once per interval."""
+    subs = FakeSubs([
+        _sub(sub_id="a", token="good-1"),
+        _sub(sub_id="b", token="good-1"),  # shares a token with a
+        _sub(sub_id="c", token="junk-token-xyz"),
+    ])
+
+    async def validate(token: str) -> bool:
+        return token != "junk-token-xyz"
+
+    now = datetime(2026, 7, 23, 12, tzinfo=UTC)
+    out = await prune_stale_subscriptions(subs, validate, last_run=None, now=now)
+    assert out.ran is True
+    assert out.checked == 2  # two unique tokens validated
+    assert out.pruned == 1
+    assert {s.id for s in subs.list_all()} == {"a", "b"}
+
+    # Within the interval it does not run again.
+    out2 = await prune_stale_subscriptions(
+        subs, validate, last_run=now, now=now + timedelta(hours=1)
+    )
+    assert out2.ran is False
+    assert out2.pruned == 0
 
 
 @pytest.mark.asyncio
