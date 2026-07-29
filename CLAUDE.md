@@ -55,8 +55,11 @@ outage's polygon actually covers its point unless the user opts into area alerts
 - **Git:** branch, PR, let CI pass (checks `backend` + `android` are required on
   `main`; force-push and deletion are blocked), then squash-merge. Don't commit
   to `main` directly.
-- **Secrets:** none live in the repo. `mobile/local.properties` (keystore +
-  Firebase keys) and `GoogleService-Info.plist` are gitignored. The Anthropic key
+- **Secrets:** none live in the repo. The master copy is `~/Desktop/outagewatch.env`
+  (outside the repo); `sh mobile/scripts/sync-secrets.sh` fans it out to the
+  gitignored files each tool reads: `mobile/local.properties` (keystore +
+  Firebase keys) and `mobile/iosApp/Configuration/Local.xcconfig` (TEAM_ID).
+  `GoogleService-Info.plist` is gitignored too. The Anthropic key
   is in GCP Secret Manager, injected as an env var at deploy (see the secret flow
   in `backend/scripts/deploy.sh` + `explain.py`). The repo is **public** and has
   been audited clean of secrets.
