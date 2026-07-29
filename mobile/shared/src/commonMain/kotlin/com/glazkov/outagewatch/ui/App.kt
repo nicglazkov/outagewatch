@@ -14,6 +14,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.glazkov.outagewatch.ui.theme.LocalCompass
 import androidx.compose.ui.graphics.Color
 import com.glazkov.outagewatch.update.AppUpdate
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -118,6 +126,13 @@ fun App() {
             PendingOutage.id.value = null
             nav.navigate(DetailRoute(id))
         }
+        // Every screen is a phone layout. On a tablet, cap it at a comfortable
+        // column and centre it instead of stretching body copy edge to edge.
+        Box(
+            Modifier.fillMaxSize().background(LocalCompass.current.background),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+        Box(Modifier.widthIn(max = 600.dp).fillMaxSize()) {
         NavHost(navController = nav, startDestination = HomeRoute) {
             composable<HomeRoute> {
                 HomeScreen(
@@ -152,6 +167,8 @@ fun App() {
                 val route = entry.toRoute<DetailRoute>()
                 OutageDetailScreen(outageId = route.outageId, onBack = { nav.popBackStack() })
             }
+        }
+        }
         }
 
         update?.let { available ->
