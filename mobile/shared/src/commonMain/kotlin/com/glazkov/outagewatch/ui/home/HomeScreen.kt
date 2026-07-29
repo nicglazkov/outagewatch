@@ -23,8 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -43,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -57,6 +61,7 @@ import com.glazkov.outagewatch.ui.theme.Cell
 import com.glazkov.outagewatch.ui.theme.GroupedFootnote
 import com.glazkov.outagewatch.ui.theme.LargeTitle
 import com.glazkov.outagewatch.ui.theme.LocalCompass
+import com.glazkov.outagewatch.ui.theme.OutageBolt
 import com.glazkov.outagewatch.ui.theme.SectionHeader
 import kotlinx.coroutines.launch
 
@@ -202,31 +207,46 @@ fun HomeScreen(
 private fun SummaryCell(affected: Int, errored: Int, total: Int, onRetry: () -> Unit) {
     val c = LocalCompass.current
     // Never claim "all clear" when we actually could not reach the feed.
-    val (emoji, tint, text, retry) = when {
-        affected > 0 ->
-            Quad("⚡", c.outageTint, "$affected of $total ${plural(total, "area")} affected", false)
-        errored >= total ->
-            Quad("⚠️", c.outageTint, "Can't reach PG&E right now. Tap to retry.", true)
-        errored > 0 ->
-            Quad("⚠️", c.outageTint, "Couldn't check $errored of $total. Tap to retry.", true)
-        else ->
-            Quad("✓", c.clearTint, "All $total ${plural(total, "area")} clear", false)
+    val summary = when {
+        affected > 0 -> Summary(
+            OutageBolt, c.outageTint, c.outage,
+            "$affected of $total ${plural(total, "area")} affected", false,
+        )
+        errored >= total -> Summary(
+            Icons.Default.Warning, c.outageTint, c.outage,
+            "Can't reach PG&E right now. Tap to retry.", true,
+        )
+        errored > 0 -> Summary(
+            Icons.Default.Warning, c.outageTint, c.outage,
+            "Couldn't check $errored of $total. Tap to retry.", true,
+        )
+        else -> Summary(
+            Icons.Default.Check, c.clearTint, c.clear,
+            "All $total ${plural(total, "area")} clear", false,
+        )
     }
     Column(
         Modifier.padding(horizontal = 16.dp).fillMaxWidth()
             .clip(RoundedCornerShape(14.dp)).background(c.card),
     ) {
         Cell(
-            title = text,
-            leadingEmoji = emoji,
-            leadingTint = tint,
+            title = summary.text,
+            leadingIcon = summary.icon,
+            leadingTint = summary.tint,
+            leadingIconTint = summary.iconTint,
             showSeparator = false,
-            onClick = if (retry) onRetry else null,
+            onClick = if (summary.retry) onRetry else null,
         )
     }
 }
 
-private data class Quad(val a: String, val b: Color, val c: String, val d: Boolean)
+private data class Summary(
+    val icon: ImageVector,
+    val tint: Color,
+    val iconTint: Color,
+    val text: String,
+    val retry: Boolean,
+)
 
 @Composable
 private fun RemovableAreaCell(
@@ -272,15 +292,20 @@ private fun AreaCell(status: LocationStatus, last: Boolean, onOpenZip: (SavedLoc
     Cell(
         title = status.location.label,
         subtitle = subtitle,
-        leadingEmoji = when {
-            status.error -> "?"
-            status.isOut -> "⚡"
-            else -> "✓"
+        leadingIcon = when {
+            status.error -> Icons.Default.Refresh
+            status.isOut -> OutageBolt
+            else -> Icons.Default.Check
         },
         leadingTint = when {
             status.error -> c.separator
             status.isOut -> c.outageTint
             else -> c.clearTint
+        },
+        leadingIconTint = when {
+            status.error -> c.secondary
+            status.isOut -> c.outage
+            else -> c.clear
         },
         trailing = when {
             status.error -> "?"

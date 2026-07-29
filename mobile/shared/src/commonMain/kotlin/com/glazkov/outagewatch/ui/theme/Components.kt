@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,8 +80,9 @@ fun GroupedSection(content: @Composable () -> Unit) {
 fun Cell(
     title: String,
     subtitle: String? = null,
-    leadingEmoji: String? = null,
+    leadingIcon: ImageVector? = null,
     leadingTint: Color? = null,
+    leadingIconTint: Color? = null,
     trailing: String? = null,
     trailingColor: Color? = null,
     chevron: Boolean = false,
@@ -96,12 +98,19 @@ fun Cell(
                 .padding(horizontal = 16.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (leadingEmoji != null) {
+            if (leadingIcon != null) {
                 Box(
                     Modifier.size(30.dp).clip(RoundedCornerShape(8.dp))
                         .background(leadingTint ?: c.separator),
                     contentAlignment = Alignment.Center,
-                ) { Text(leadingEmoji, fontSize = 15.sp) }
+                ) {
+                    Icon(
+                        leadingIcon,
+                        contentDescription = null,
+                        tint = leadingIconTint ?: c.secondary,
+                        modifier = Modifier.size(17.dp),
+                    )
+                }
                 Spacer(Modifier.width(12.dp))
             }
             Column(Modifier.weight(1f)) {

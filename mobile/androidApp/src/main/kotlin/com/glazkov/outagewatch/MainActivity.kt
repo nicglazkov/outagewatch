@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         // A notification tap launches us with this extra; let the UI open it.
-        intent?.getStringExtra(EXTRA_OUTAGE_ID)?.let { PendingOutage.id.value = it }
+        intent?.getStringExtra(EXTRA_OUTAGE_ID)?.let { PendingOutage.open(it) }
         lifecycleScope.launch {
             // One-time: switch existing watches to address-only so the app stops
             // sending "outage nearby" pushes; then heal any un-registered subs.
@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.getStringExtra(EXTRA_OUTAGE_ID)?.let { PendingOutage.id.value = it }
+        intent.getStringExtra(EXTRA_OUTAGE_ID)?.let { PendingOutage.open(it) }
     }
 
     /** Check GitHub for a newer release about twice a day, in the background, so

@@ -45,6 +45,13 @@ object AppGraph {
  */
 object PendingOutage {
     val id = MutableStateFlow<String?>(null)
+
+    /** Hosts should call this rather than assigning to [id]: Kotlin/Native
+     *  exports MutableStateFlow to Swift without its setter, so `id.value = x`
+     *  does not compile on iOS. */
+    fun open(outageId: String) {
+        id.value = outageId
+    }
 }
 
 /** Opens a URL (or mailto:) in the platform browser/mail app. Set by the host. */

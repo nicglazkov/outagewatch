@@ -168,10 +168,15 @@ class LocationsRepository(
     private suspend fun commit(base: SavedLocation): AddOutcome = mutex.withLock {
         // Re-adding the same area must release its old subscription first, or the
         // backend keeps both and the user gets duplicate notifications.
-        _locations.value.firstOrNull { it.id == base.id }?.subscriptionId
+        val existing = _locations.value.firstOrNull { it.id == base.id }
+        existing?.subscriptionId
             ?.let { runCatching { api.unsubscribe(it, PushTokens.current()) } }
         val location = base.copy(subscriptionId = subscribeFor(base))
-        _locations.value = _locations.value.filter { it.id != location.id } + location
+        // Editing a place (an area-alerts toggle, say) must leave it where it
+        // is; appending would slide the row out from under the user's finger.
+        _locations.value =
+            if (existing == null) _locations.value + location
+            else _locations.value.map { if (it.id == location.id) location else it }
         persist()
         AddOutcome.Added(location)
     }

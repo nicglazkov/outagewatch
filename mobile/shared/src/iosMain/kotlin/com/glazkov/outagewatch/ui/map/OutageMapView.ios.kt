@@ -9,7 +9,9 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSURL
 import platform.WebKit.WKNavigationActionPolicy
 import platform.WebKit.WKNavigationDelegateProtocol
-import platform.WebKit.WKNavigationType
+// Not an enum class: WKNavigationType ends at "Other = -1", so cinterop leaves
+// it a typealias over NSInteger and exposes the cases as top-level constants.
+import platform.WebKit.WKNavigationTypeLinkActivated
 import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
 import platform.WebKit.WKNavigationAction
@@ -43,7 +45,7 @@ actual fun OutageMapView(
                 val url = decidePolicyForNavigationAction.request.URL
                 val isLinkTap =
                     decidePolicyForNavigationAction.navigationType ==
-                        WKNavigationType.WKNavigationTypeLinkActivated
+                        WKNavigationTypeLinkActivated
                 if (url?.scheme == "ow" && url.host == "outage") {
                     url.lastPathComponent?.let(onOutageTap)
                     decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
