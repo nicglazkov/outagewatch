@@ -24,6 +24,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.glazkov.outagewatch.api.OutageApi
 import com.glazkov.outagewatch.data.LocationsRepository
+import com.glazkov.outagewatch.data.platformName
 import com.glazkov.outagewatch.ui.add.AddLocationScreen
 import com.glazkov.outagewatch.ui.detail.OutageDetailScreen
 import com.glazkov.outagewatch.ui.home.HomeScreen
@@ -93,11 +94,14 @@ fun App() {
     MaterialTheme(colorScheme = colors) {
         val nav = rememberNavController()
 
-        // Once per launch, ask GitHub for a newer release. The dialog is shown
-        // once and only once per new version (tracked in settings).
+        // Android only: it self-updates from GitHub Releases, so once per launch
+        // ask GitHub for a newer release (shown once per version). iOS updates
+        // through the App Store, so it must never prompt to download an APK.
         var update by remember { mutableStateOf<AppUpdate.Available?>(null) }
         LaunchedEffect(Unit) {
-            update = AppUpdate.check(AppInfo.version, AppGraph.api)
+            if (platformName() != "ios") {
+                update = AppUpdate.check(AppInfo.version, AppGraph.api)
+            }
         }
 
         // A notification tap sets PendingOutage.id; open that outage, then clear it.
