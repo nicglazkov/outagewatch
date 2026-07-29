@@ -115,6 +115,62 @@ PG&E's public outage map.** Reviewers are wary of apps that appear to represent 
 utility. The disclaimer is already on the home screen and the outage detail
 screen.
 
+### Listing copy
+
+**Subtitle** (30 characters max, currently 18):
+
+```
+PG&E outage alerts
+```
+
+**Promotional text** (170 max, editable without a new build):
+
+```
+Know the moment an outage reaches your address, not just your neighborhood. Free, no account, no ads.
+```
+
+**Keywords** (100 characters max, comma separated, no spaces after commas). Do
+not repeat the app name or subtitle here; Apple indexes those separately.
+
+```
+power,blackout,pge,psps,electricity,grid,utility,storm,alerts,california,restoration
+```
+
+**Description**:
+
+```
+OutageWatch tells you when a PG&E power outage reaches the places you care about.
+
+Add your home by address and you only hear about outages that actually cover it.
+Add a whole ZIP code and you hear about anything in that area. Either way you get
+a push notification the moment PG&E reports it, and another when the estimate
+changes or the power comes back.
+
+What you get
+
+- Live outage status for every place you save
+- A map of what is out around you
+- Cause, crew status, customers affected, and the estimated restoration time
+- A plain-language summary of what is actually going on, instead of utility jargon
+- Public Safety Power Shutoff warnings
+- Quiet hours, so an overnight outage does not wake you. PSPS warnings always
+  come through
+
+No account. No sign-up. No ads. No tracking. You never give us a name, an email,
+or a phone number.
+
+OutageWatch is an independent app. It is not affiliated with, endorsed by, or
+operated by PG&E. Data comes from PG&E's public outage map and can lag behind
+what is happening on the ground. For emergencies call 911. Report downed power
+lines to PG&E at 1-800-743-5000.
+```
+
+**What's New** (first release):
+
+```
+First release.
+```
+
 ### App Privacy questionnaire
 
 Answer **No** to "Do you or your third-party partners use data for tracking?".
