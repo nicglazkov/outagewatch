@@ -39,22 +39,36 @@ is the only way.
 1. Go to <https://developer.apple.com/account/resources/authkeys/list>.
 2. Click **+** (Create a key).
 3. Name it something like `OutageWatch APNs`.
-4. Tick **Apple Push Notifications service (APNs)**.
+4. Tick **Apple Push Notifications service (APNs)**. Two required fields appear:
+   - **Environment**: pick **Sandbox & Production**. Firebase uses one key for
+     both, and a sandbox-only key works in development then silently fails once
+     you ship.
+   - **Key Restriction**: pick **Team Scoped (All Topics)**. Firebase's upload
+     form does not handle topic-scoped keys well, and team scope covers any
+     future app too.
 5. Click **Continue**, then **Register**.
 6. Click **Download**. You get a `.p8` file.
 
-**The `.p8` downloads exactly once.** Save it somewhere you keep permanently, not
-Downloads. Also note the **Key ID** shown on that page, and your Team ID from
-step 1.
+**The `.p8` downloads exactly once.** Save it outside this repo, somewhere you
+keep permanently, not Downloads. `*.p8` is gitignored as a backstop, but the key
+can send push as us, so it does not belong anywhere near the tree.
 
-Do not commit the `.p8` to the repo.
+Apple allows only **two active APNs auth keys per team**, so do not create spares
+while experimenting. If you lose one, revoke it and register a new one.
+
+Also copy the **Key ID** shown on that page (10 characters), and your Team ID
+from step 1. The next step needs both.
 
 ## Step 3. Give the key to Firebase
 
 1. Go to <https://console.firebase.google.com/project/outagewatch/settings/cloudmessaging>.
 2. Under **Apple app configuration**, find the `com.glazkov.outagewatch` app.
 3. Under **APNs Authentication Key**, click **Upload**.
-4. Upload the `.p8`, and enter the **Key ID** and **Team ID**.
+4. Upload the `.p8`, and enter the **Key ID** and the **Team ID**.
+
+A typo in the Key ID fails silently: FCM simply never issues a token. The key can
+be checked locally, without it leaving the Mac, by minting an APNs JWT from it and
+calling Apple's endpoint.
 
 The iOS app already exists in Firebase (`1:468206169285:ios:10cb2c0f7f60dd46b994ac`),
 so there is nothing to create here.
