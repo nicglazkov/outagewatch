@@ -30,6 +30,8 @@ venv/
 *.aab
 *.keystore
 *.jks
+# APNs auth key. Downloadable exactly once, and it can send push as us.
+*.p8
 local.properties
 .gradle/
 app/build/
