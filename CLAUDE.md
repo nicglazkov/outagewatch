@@ -11,9 +11,10 @@ authoritative, current-state guide. This file is the whole-project map.
 - **Backend API** (public): `https://outagewatch-api-7bi2fdpqrq-uw.a.run.app`
 - **Web app**: served by that same service at `/` (landing), `/statewide`, `/widget`, `/privacy`, `/terms`
 - **Android app**: shipped as a signed APK via GitHub Releases (latest `v0.2.5`). In-app updater pulls new releases.
-- **iOS app**: wired and running in the simulator (all four platform singletons,
-  Firebase via SPM). Shipping is gated on Apple Developer enrollment: Team ID,
-  Push Notifications capability, APNs key, TestFlight. See the handoff doc.
+- **iOS app**: wired, running, and verified screen by screen in the simulator
+  (all four platform singletons, Firebase via SPM). iPhone-only for v1. Shipping
+  is gated on Apple Developer enrollment: see [`docs/APP_STORE.md`](docs/APP_STORE.md)
+  for the exact remaining steps, and `docs/IOS_HANDOFF.md` for what is wired.
 
 ## Repo layout
 
