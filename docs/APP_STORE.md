@@ -29,7 +29,16 @@ app exists for.
 4. Go to <https://developer.apple.com/account> and click **Membership details**.
    Copy the **Team ID**: ten characters, like `A1B2C3D4E5`.
 
-**Send me the Team ID.** I put it in `mobile/iosApp/Configuration/Config.xcconfig`.
+**Then paste the Team ID into `~/Desktop/outagewatch.env`** (the master secrets
+file; everything sensitive goes there and never into the repo) and run:
+
+```bash
+sh mobile/scripts/sync-secrets.sh
+```
+
+That writes it to a gitignored `Local.xcconfig` the build picks up. The same env
+file and script carry the Firebase Android values, the release keystore, and the
+APNs key id and path, so one file rebuilds any machine.
 
 ## Step 2. Create the APNs auth key
 
