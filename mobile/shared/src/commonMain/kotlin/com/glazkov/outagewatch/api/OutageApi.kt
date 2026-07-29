@@ -30,13 +30,44 @@ data class ReleaseInfo(
     @SerialName("html_url") val htmlUrl: String? = null,
 )
 
-class OutageApi(private val client: HttpClient = defaultClient()) {
-
+/**
+ * The backend as the app sees it. An interface so screens and the repository
+ * can be exercised against a fake instead of the live service.
+ */
+interface OutageApi {
     suspend fun outagesNear(
         lat: Double,
         lon: Double,
         radiusKm: Double = 10.0,
         includeGeometry: Boolean = false,
+    ): List<Outage>
+
+    suspend fun outagesForZip(zip: String): List<Outage>
+
+    /** Null means the outage is gone (404, likely restored); throws on network/server error. */
+    suspend fun outageDetail(id: String): OutageDetail?
+
+    suspend fun explain(id: String): Explanation
+
+    suspend fun autocomplete(query: String, lat: Double? = null, lon: Double? = null): List<AddressSuggestion>
+
+    /** Null when the ZIP is not a known California ZIP. */
+    suspend fun zipInfo(zip: String): ZipInfo?
+
+    suspend fun subscribe(request: SubscriptionRequest): SubscriptionCreated
+
+    suspend fun unsubscribe(subscriptionId: String, deviceToken: String?)
+
+    suspend fun latestRelease(): ReleaseInfo?
+}
+
+class HttpOutageApi(private val client: HttpClient = defaultClient()) : OutageApi {
+
+    override suspend fun outagesNear(
+        lat: Double,
+        lon: Double,
+        radiusKm: Double,
+        includeGeometry: Boolean,
     ): List<Outage> =
         client.get("${ApiConfig.baseUrl}/v1/outages") {
             parameter("lat", lat)
@@ -45,11 +76,11 @@ class OutageApi(private val client: HttpClient = defaultClient()) {
             if (includeGeometry) parameter("include_geometry", true)
         }.body()
 
-    suspend fun outagesForZip(zip: String): List<Outage> =
+    override suspend fun outagesForZip(zip: String): List<Outage> =
         client.get("${ApiConfig.baseUrl}/v1/outages") { parameter("zip", zip) }.body()
 
     /** Null means the outage is gone (404, likely restored); throws on network/server error. */
-    suspend fun outageDetail(id: String): OutageDetail? {
+    override suspend fun outageDetail(id: String): OutageDetail? {
         val response = client.get("${ApiConfig.baseUrl}/v1/outages/$id")
         return when (response.status) {
             HttpStatusCode.OK -> response.body()
@@ -58,17 +89,17 @@ class OutageApi(private val client: HttpClient = defaultClient()) {
         }
     }
 
-    suspend fun explain(id: String): Explanation =
+    override suspend fun explain(id: String): Explanation =
         client.get("${ApiConfig.baseUrl}/v1/outages/$id/explain").body()
 
     /**
      * Google-Maps-style address suggestions as the user types. Biased toward
      * [lat]/[lon] when given. Returns empty on any error so typing never throws.
      */
-    suspend fun autocomplete(
+    override suspend fun autocomplete(
         query: String,
-        lat: Double? = null,
-        lon: Double? = null,
+        lat: Double?,
+        lon: Double?,
     ): List<AddressSuggestion> {
         val response = client.get("${ApiConfig.baseUrl}/v1/geocode/autocomplete") {
             parameter("q", query)
@@ -79,12 +110,12 @@ class OutageApi(private val client: HttpClient = defaultClient()) {
     }
 
     /** Null when the ZIP is not a known California ZIP. */
-    suspend fun zipInfo(zip: String): ZipInfo? {
+    override suspend fun zipInfo(zip: String): ZipInfo? {
         val response = client.get("${ApiConfig.baseUrl}/v1/zips/$zip")
         return if (response.status == HttpStatusCode.OK) response.body() else null
     }
 
-    suspend fun subscribe(request: SubscriptionRequest): SubscriptionCreated =
+    override suspend fun subscribe(request: SubscriptionRequest): SubscriptionCreated =
         client.post("${ApiConfig.baseUrl}/v1/subscriptions") {
             contentType(ContentType.Application.Json)
             setBody(request)
@@ -94,7 +125,7 @@ class OutageApi(private val client: HttpClient = defaultClient()) {
      * Release a subscription. The backend only deletes it if [deviceToken] owns
      * it, so a leaked id alone can't unsubscribe someone else's device.
      */
-    suspend fun unsubscribe(subscriptionId: String, deviceToken: String?) {
+    override suspend fun unsubscribe(subscriptionId: String, deviceToken: String?) {
         client.delete("${ApiConfig.baseUrl}/v1/subscriptions/$subscriptionId") {
             if (deviceToken != null) header("X-Device-Token", deviceToken)
         }
@@ -104,7 +135,7 @@ class OutageApi(private val client: HttpClient = defaultClient()) {
      * The latest published GitHub release, used for the in-app update check.
      * Returns null on any error so a failed check never disrupts the app.
      */
-    suspend fun latestRelease(): ReleaseInfo? {
+    override suspend fun latestRelease(): ReleaseInfo? {
         val resp = client.get("https://api.github.com/repos/nicglazkov/outagewatch/releases/latest") {
             header("Accept", "application/vnd.github+json")
         }

@@ -30,6 +30,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.glazkov.outagewatch.api.HttpOutageApi
 import com.glazkov.outagewatch.api.OutageApi
 import com.glazkov.outagewatch.data.LocationsRepository
 import com.glazkov.outagewatch.data.platformName
@@ -42,7 +43,7 @@ import kotlinx.serialization.Serializable
 
 /** Process-wide dependencies. Deliberately tiny; no DI framework needed yet. */
 object AppGraph {
-    val api: OutageApi by lazy { OutageApi() }
+    val api: OutageApi by lazy { HttpOutageApi() }
     val locations: LocationsRepository by lazy { LocationsRepository(api) }
 }
 
