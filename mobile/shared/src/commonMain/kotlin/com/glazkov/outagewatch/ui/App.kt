@@ -14,6 +14,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.glazkov.outagewatch.ui.theme.LocalCompass
 import androidx.compose.ui.graphics.Color
 import com.glazkov.outagewatch.update.AppUpdate
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +30,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.glazkov.outagewatch.api.HttpOutageApi
 import com.glazkov.outagewatch.api.OutageApi
 import com.glazkov.outagewatch.data.LocationsRepository
 import com.glazkov.outagewatch.data.platformName
@@ -34,7 +43,7 @@ import kotlinx.serialization.Serializable
 
 /** Process-wide dependencies. Deliberately tiny; no DI framework needed yet. */
 object AppGraph {
-    val api: OutageApi by lazy { OutageApi() }
+    val api: OutageApi by lazy { HttpOutageApi() }
     val locations: LocationsRepository by lazy { LocationsRepository(api) }
 }
 
@@ -45,6 +54,13 @@ object AppGraph {
  */
 object PendingOutage {
     val id = MutableStateFlow<String?>(null)
+
+    /** Hosts should call this rather than assigning to [id]: Kotlin/Native
+     *  exports MutableStateFlow to Swift without its setter, so `id.value = x`
+     *  does not compile on iOS. */
+    fun open(outageId: String) {
+        id.value = outageId
+    }
 }
 
 /** Opens a URL (or mailto:) in the platform browser/mail app. Set by the host. */
@@ -111,6 +127,13 @@ fun App() {
             PendingOutage.id.value = null
             nav.navigate(DetailRoute(id))
         }
+        // Every screen is a phone layout. On a tablet, cap it at a comfortable
+        // column and centre it instead of stretching body copy edge to edge.
+        Box(
+            Modifier.fillMaxSize().background(LocalCompass.current.background),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+        Box(Modifier.widthIn(max = 600.dp).fillMaxSize()) {
         NavHost(navController = nav, startDestination = HomeRoute) {
             composable<HomeRoute> {
                 HomeScreen(
@@ -145,6 +168,8 @@ fun App() {
                 val route = entry.toRoute<DetailRoute>()
                 OutageDetailScreen(outageId = route.outageId, onBack = { nav.popBackStack() })
             }
+        }
+        }
         }
 
         update?.let { available ->

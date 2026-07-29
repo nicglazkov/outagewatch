@@ -11,7 +11,10 @@ authoritative, current-state guide. This file is the whole-project map.
 - **Backend API** (public): `https://outagewatch-api-7bi2fdpqrq-uw.a.run.app`
 - **Web app**: served by that same service at `/` (landing), `/statewide`, `/widget`, `/privacy`, `/terms`
 - **Android app**: shipped as a signed APK via GitHub Releases (latest `v0.2.5`). In-app updater pulls new releases.
-- **iOS app**: not functionally wired yet — see the handoff doc. This is the current work.
+- **iOS app**: wired, running, and verified screen by screen in the simulator
+  (all four platform singletons, Firebase via SPM). iPhone-only for v1. Shipping
+  is gated on Apple Developer enrollment: see [`docs/APP_STORE.md`](docs/APP_STORE.md)
+  for the exact remaining steps, and `docs/IOS_HANDOFF.md` for what is wired.
 
 ## Repo layout
 
@@ -71,10 +74,13 @@ clobber a global default: `gcloud config configurations activate outagewatch`
 
 Mobile (from `mobile/`; set `JAVA_HOME` to an Android Studio JBR / a JDK 17+):
 ```bash
-./gradlew :androidApp:assembleDebug             # compile the shared + Android app
-./gradlew :shared:testAndroidHostTest           # shared unit tests (Coverage, AppUpdate, ...)
-./gradlew :androidApp:assembleRelease           # signed APK (needs keystore in local.properties)
+sh gradlew :androidApp:assembleDebug            # compile the shared + Android app
+sh gradlew :shared:testAndroidHostTest          # shared unit tests (Coverage, AppUpdate, ...)
+sh gradlew :shared:compileKotlinIosSimulatorArm64  # sanity-compile the iOS target
+sh gradlew :androidApp:assembleRelease          # signed APK (needs keystore in local.properties)
 ```
+Invoke Gradle as `sh gradlew`: the wrapper is committed without its executable
+bit, so `./gradlew` fails. CI and the Xcode build phase do the same.
 iOS: open `mobile/iosApp/iosApp.xcodeproj` in Xcode after a shared build. See the
 handoff doc for the full setup (Firebase, signing, wiring).
 

@@ -27,6 +27,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,6 +45,7 @@ import com.glazkov.outagewatch.ui.map.OutageMapView
 import com.glazkov.outagewatch.ui.theme.Cell
 import com.glazkov.outagewatch.ui.theme.GroupedSection
 import com.glazkov.outagewatch.ui.theme.LocalCompass
+import com.glazkov.outagewatch.ui.theme.OutageBolt
 import com.glazkov.outagewatch.ui.theme.SectionHeader
 import kotlin.math.roundToInt
 
@@ -128,8 +131,9 @@ fun ZipDetailScreen(
                                 subtitle = listOfNotNull(
                                     o.cause, o.city, customersLine(o.estCustomers), etaBack(o.eta),
                                 ).joinToString(", ").ifEmpty { "Details pending" },
-                                leadingEmoji = if (o.isPsps) "⚠️" else "⚡",
+                                leadingIcon = if (o.isPsps) Icons.Default.Warning else OutageBolt,
                                 leadingTint = c.outageTint,
+                                leadingIconTint = c.outage,
                                 trailing = when {
                                     entry.inZip -> "here"
                                     entry.distanceKm != null -> "${entry.distanceKm.roundToInt()} km"
