@@ -4,7 +4,7 @@
 
 <br>
 
-**Know before the lights go out.** Push alerts, restoration times, and plain-language answers for power outages in PG&amp;E territory. Free, no account.
+**Know before the lights go out.** Push alerts, restoration times, and plain-language answers for power outages in PG&amp;E territory. On iPhone and Android. Free, no account.
 
 [![Latest release](https://img.shields.io/github/v/release/nicglazkov/outagewatch?color=FFC94A&label=release)](https://github.com/nicglazkov/outagewatch/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/nicglazkov/outagewatch/ci.yml?branch=main&label=CI)](https://github.com/nicglazkov/outagewatch/actions/workflows/ci.yml)
@@ -17,6 +17,8 @@
 ---
 
 ## Download
+
+The app runs on **both iPhone and Android** today. iPhone installs through a free TestFlight beta; Android installs as a signed APK that updates itself in place.
 
 <div align="center">
 
