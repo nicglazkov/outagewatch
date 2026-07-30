@@ -56,21 +56,45 @@ the privacy policy URL; take them from the appendix.
 With those set, Claude can archive, sign, and upload builds non-interactively,
 including the quarterly refresh.
 
-### 3. First upload (Claude, one command once 1 and 2 are done)
+### 3. First upload (done July 29, 2026; recipe for every refresh)
 
-Archive with the release configuration, export with method `app-store-connect`
-and destination `upload`, authenticated by the ASC API key. Then in App Store
-Connect, TestFlight tab: the build appears after processing (minutes).
+Build 1 (0.2.5) is uploaded, processed VALID, and attached to the `Public`
+group. **The public link: <https://testflight.apple.com/join/YqeVwyat>** (goes
+on the website once Beta App Review clears).
 
-### 4. Turn on external testing (Nic, once)
+The working recipe, learned the hard way: an **App Manager** API key cannot
+cloud-sign (that needs Admin), so the archive and upload authenticate with the
+Xcode account session, and the API key does everything else (compliance, groups,
+localizations, status polling). From `mobile/iosApp`:
 
-1. TestFlight tab, **External Testing**, create a group (say `Public`), enable
-   **Public Link**.
-2. Add the build to the group and submit for Beta App Review, using the Test
-   Information from the appendix.
-3. When it clears, put the public link on the website: the iPhone card on the
-   landing page has a placeholder button waiting for it
-   (`backend/src/outagewatch/api/static/index.html`).
+```bash
+xcodebuild -project iosApp.xcodeproj -scheme iosApp -configuration Release   -destination 'generic/platform=iOS' -archivePath /tmp/OutageWatch.xcarchive   archive -allowProvisioningUpdates
+xcodebuild -exportArchive -archivePath /tmp/OutageWatch.xcarchive   -exportOptionsPlist exportOptions.plist -exportPath /tmp/export   -allowProvisioningUpdates
+```
+
+with `exportOptions.plist` containing method `app-store-connect`, destination
+`upload`, the team id, and `manageAppVersionAndBuildNumber` true. Export
+compliance is pre-answered per build via the ASC API
+(`usesNonExemptEncryption=false`, HTTPS only); adding
+`ITSAppUsesNonExemptEncryption=false` to Info.plist would answer it permanently.
+
+If the account session ever goes stale (signing errors out of nowhere), open
+Xcode, Settings, Accounts, and sign in again.
+
+### 4. Submit for Beta App Review (Nic, once)
+
+The group, public link, build attachment, beta description, and feedback email
+are all done via the API. What the API cannot supply is the review contact
+phone number, so in App Store Connect, TestFlight tab:
+
+1. **Test Information**, fill the Beta App Review contact fields (name, phone,
+   email); review notes: "Not affiliated with PG&E; reads only PG&E's public
+   outage map. No account or sign-in." Save.
+2. **External Testing > Public**: build 0.2.5 (1) shows **Ready to Submit**;
+   click **Submit for Review**.
+3. When it clears (about a day), the public link opens for everyone; the
+   landing page's iPhone card placeholder gets the link and the backend gets
+   deployed.
 
 ### 5. Quarterly refresh
 
