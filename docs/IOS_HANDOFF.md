@@ -28,10 +28,13 @@ by driving the running app, not by inspection:
 - Android is unaffected: `:shared:testAndroidHostTest` and
   `:androidApp:assembleDebug` still pass.
 
-**Not verifiable without a paid account:** acquiring a real FCM token. Firebase
-needs an APNs key before it will issue one, so no `platform: "ios"` subscription
-reaches the backend yet. Everything downstream of the token is proven; the
-token itself is the only missing link.
+**Push verified end to end on a real device (July 29, 2026, iPhone 17 Pro,
+iOS 26.5):** the APNs key authenticated with Apple, the FCM token was issued, a
+`platform: "ios"` subscription reached Firestore, an FCM v1 push was delivered
+over APNs to the lock screen, and tapping it navigated to the right outage. The
+self-heal path was exercised for real too: the place was saved before a token
+existed, and the token-arrival retry in `AppDelegate` registered the
+subscription on the next launch.
 
 **The four singletons, all now set** in `iosApp/iosApp/AppDelegate.swift`
 (the iOS counterpart of Android's `MainActivity.onCreate`):

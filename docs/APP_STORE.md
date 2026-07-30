@@ -27,6 +27,11 @@ the reference material for App Store Connect.
   [`appstore/iphone-6.9/`](appstore/iphone-6.9/), the privacy manifest in the
   app bundle, and the full listing copy and privacy answers below.
 
+Steps 1 through 4 below are **done** (July 29, 2026): Xcode holds the account,
+the APNs key `Y5F979AJHA` is uploaded to Firebase and validated against Apple,
+and push was delivered end to end on a real iPhone with the tap opening the
+right outage. Only step 5, TestFlight and the store listing, remains.
+
 ## Your remaining steps, in order
 
 ### 1. Sign in to Xcode (one minute, one time)
