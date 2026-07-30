@@ -1,46 +1,47 @@
 # Shipping OutageWatch on iOS
 
-Everything left is account work only you can do, plus the answers to give App
-Store Connect. Follow this top to bottom. The code side is done: see
-[`IOS_HANDOFF.md`](IOS_HANDOFF.md) for what is wired and verified.
+Current as of July 29, 2026. The code side is finished and merged; see
+[`IOS_HANDOFF.md`](IOS_HANDOFF.md) for what is wired and how it was verified.
+What remains is account work only Nic can do, spelled out below, followed by
+the reference material for App Store Connect.
 
-## Step 1. Enrol in the Apple Developer Program
+## Already done
 
-Choose **Individual**, not Organization. Organization needs the LLC to exist
-plus a D-U-N-S number, which takes days to weeks. Individual needs neither and
-is usually approved within a day.
+- **Apple Developer enrolment (Individual).** The Team ID is in
+  `~/Desktop/outagewatch.env` and flows into the build through the secrets
+  pipeline; `DEVELOPMENT_TEAM` resolves in the Xcode build settings. Converting
+  the account to an Organization once the LLC exists is a supported Apple
+  Support request that keeps the apps and bundle ids in place.
+- **Push Notifications capability.** `iosApp.entitlements`
+  (`aps-environment=development`) is committed and wired into both build
+  configurations. Xcode's automatic signing swaps it to production when
+  archiving for the App Store.
+- **Firebase iOS app** (`1:468206169285:ios:10cb2c0f7f60dd46b994ac`, bundle id
+  `com.glazkov.outagewatch`) exists, and `GoogleService-Info.plist` is on this
+  Mac, gitignored. To refetch on a new machine:
+  `firebase --project outagewatch apps:sdkconfig IOS 1:468206169285:ios:10cb2c0f7f60dd46b994ac --out mobile/iosApp/iosApp/GoogleService-Info.plist`
+- **Secrets pipeline.** Everything sensitive goes in `~/Desktop/outagewatch.env`
+  (outside the repo), and `sh mobile/scripts/sync-secrets.sh` fans it out to the
+  gitignored files the builds read.
+- **Submission kit.** Screenshots at Apple's 6.9-inch size in
+  [`appstore/iphone-6.9/`](appstore/iphone-6.9/), the privacy manifest in the
+  app bundle, and the full listing copy and privacy answers below.
 
-**This does not trap you.** Apple supports converting an existing Individual
-account to an Organization later: you contact Developer Support with the D-U-N-S
-and entity details, and the account, its apps and its bundle ids stay put.
-Transferring individual apps between accounts is a second route. Confirm the
-current paperwork with Apple when you get there, but Individual is the normal
-first step, not a corner. The trade-off in the meantime is that your personal
-legal name is the public seller name.
+## Your remaining steps, in order
 
-Why pay now rather than wait for the LLC: a free Apple ID cannot provision the
-push entitlement at all, so without the $99 you cannot test the one feature the
-app exists for.
+### 1. Sign in to Xcode (one minute, one time)
 
-1. Go to <https://developer.apple.com/programs/enroll/> and sign in with your
-   Apple ID. Use an Apple ID with two-factor authentication already on.
-2. Choose **Individual / Sole Proprietor**.
-3. Pay the $99. Wait for the approval email.
-4. Go to <https://developer.apple.com/account> and click **Membership details**.
-   Copy the **Team ID**: ten characters, like `A1B2C3D4E5`.
+This Mac has no code-signing identity yet, so a device build cannot sign until
+Xcode holds your account.
 
-**Then paste the Team ID into `~/Desktop/outagewatch.env`** (the master secrets
-file; everything sensitive goes there and never into the repo) and run:
+1. Open Xcode.
+2. **Xcode > Settings > Accounts**, click **+**, choose **Apple ID**.
+3. Sign in with the Apple ID you enrolled with.
 
-```bash
-sh mobile/scripts/sync-secrets.sh
-```
+Xcode mints the Apple Development certificate automatically on the first device
+build; there is nothing else to click.
 
-That writes it to a gitignored `Local.xcconfig` the build picks up. The same env
-file and script carry the Firebase Android values, the release keystore, and the
-APNs key id and path, so one file rebuilds any machine.
-
-## Step 2. Create the APNs auth key
+### 2. Create the APNs auth key
 
 This is what lets Firebase deliver to Apple. There is no API for it; the portal
 is the only way.
@@ -49,9 +50,8 @@ is the only way.
 2. Click **+** (Create a key).
 3. Name it something like `OutageWatch APNs`.
 4. Tick **Apple Push Notifications service (APNs)**. Two required fields appear:
-   - **Environment**: pick **Sandbox & Production**. Firebase uses one key for
-     both, and a sandbox-only key works in development then silently fails once
-     you ship.
+   - **Environment**: pick **Sandbox & Production**. A sandbox-only key works in
+     development then silently fails once you ship.
    - **Key Restriction**: pick **Team Scoped (All Topics)**. Firebase's upload
      form does not handle topic-scoped keys well, and team scope covers any
      future app too.
@@ -65,35 +65,31 @@ can send push as us, so it does not belong anywhere near the tree.
 Apple allows only **two active APNs auth keys per team**, so do not create spares
 while experimenting. If you lose one, revoke it and register a new one.
 
-Also copy the **Key ID** shown on that page (10 characters), and your Team ID
-from step 1. The next step needs both.
+Then record it in the env and sync, so the machine knows where it lives:
 
-## Step 3. Give the key to Firebase
+```bash
+# in ~/Desktop/outagewatch.env set:
+#   APNS_KEY_ID=<the 10-character id shown next to the key>
+#   APNS_KEY_PATH=<absolute path to the saved .p8>
+sh mobile/scripts/sync-secrets.sh
+```
+
+### 3. Give the key to Firebase
 
 1. Go to <https://console.firebase.google.com/project/outagewatch/settings/cloudmessaging>.
 2. Under **Apple app configuration**, find the `com.glazkov.outagewatch` app.
 3. Under **APNs Authentication Key**, click **Upload**.
-4. Upload the `.p8`, and enter the **Key ID** and the **Team ID**.
+4. Upload the `.p8`, and enter the **Key ID** and the **Team ID** (both are in
+   your env file).
 
 A typo in the Key ID fails silently: FCM simply never issues a token. The key can
 be checked locally, without it leaving the Mac, by minting an APNs JWT from it and
-calling Apple's endpoint.
+calling Apple's endpoint; ask Claude once the env has the key id and path.
 
-The iOS app already exists in Firebase (`1:468206169285:ios:10cb2c0f7f60dd46b994ac`),
-so there is nothing to create here.
+### 4. Test on your own iPhone
 
-## Step 4. Turn on the push capability (I do this, once you send the Team ID)
-
-In Xcode, target `iosApp`, **Signing & Capabilities**, **+ Capability**, add
-**Push Notifications**. That writes an `aps-environment` entitlement, which only
-a paid team can provision, which is why it is deliberately not in the repo yet.
-
-`UIBackgroundModes: remote-notification` is already in `Info.plist` and needs no
-entitlement.
-
-## Step 5. Test on your own iPhone
-
-You do not need TestFlight for this, and there is no review.
+No TestFlight needed for this, and there is no review. Plug the phone in and say
+so; the checklist is:
 
 1. Plug your iPhone into the Mac. Unlock it and trust the computer.
 2. In Xcode, pick your iPhone from the device menu at the top, and press Run.
@@ -105,13 +101,18 @@ You do not need TestFlight for this, and there is no review.
    <https://console.firebase.google.com/project/outagewatch/notification>, or wait
    for a real outage to reach your saved place.
 
-## Step 6. TestFlight, then the App Store
+This is the single remaining unverified link: everything downstream of the FCM
+token is proven in the simulator, but no token can exist until steps 2 and 3 are
+done.
+
+### 5. TestFlight, then the App Store
 
 - **Internal testing** (you and up to 100 people on your team) skips Beta App
   Review. This is the fastest way to try a real build.
 - **External testing** (up to 10,000) needs a one-time Beta App Review, usually a
   day or two.
-- Then submit for App Store review.
+- Then create the listing in App Store Connect using the material below, and
+  submit for review.
 
 ## App Store Connect answers
 
@@ -220,11 +221,3 @@ It also declares the two required-reason APIs the app touches: `NSUserDefaults`
 (`CA92.1`, saved places and preferences) and system boot time (`35F9.1`, elapsed
 time in the Kotlin/Native runtime). Keep the manifest and the questionnaire in
 step with each other.
-
-## What I still need from you
-
-1. The **Team ID** from step 1.
-2. Confirmation that the **APNs key is uploaded to Firebase** (steps 2 and 3).
-3. A **physical iPhone** when you want to prove push end to end.
-
-Everything else is done and waiting.
