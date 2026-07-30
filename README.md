@@ -22,17 +22,17 @@
 
 [![Download APK](https://img.shields.io/badge/Download-Android_APK-FFC94A?style=for-the-badge&logo=android&logoColor=1A1A2E)](https://github.com/nicglazkov/outagewatch/releases/latest)
 &nbsp;
-![App Store](https://img.shields.io/badge/App_Store-Coming_Aug_2026-0D96F6?style=for-the-badge&logo=apple&logoColor=white)
+[![TestFlight](https://img.shields.io/badge/iPhone-TestFlight_beta-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/YqeVwyat)
 &nbsp;
-![Google Play](https://img.shields.io/badge/Google_Play-Coming_Aug_2026-414141?style=for-the-badge&logo=googleplay&logoColor=white)
+![Google Play](https://img.shields.io/badge/Google_Play-Planned-414141?style=for-the-badge&logo=googleplay&logoColor=white)
 
 </div>
 
 **Android, right now:** grab the latest `OutageWatch-x.y.z.apk` from the [**Releases**](https://github.com/nicglazkov/outagewatch/releases/latest) page and open it on your phone. You may need to allow "install from this source" when your browser or files app asks. It updates in place over older versions.
 
-**About the Play Protect warning:** the first time you open the APK, Android may say it "hasn't seen an app from this developer before." That is expected for any app installed outside the Play Store, not a sign of a problem. OutageWatch is signed and asks only for internet, notifications, and approximate location. Tap **More details**, then **Install anyway** to continue. The warning goes away once the app is on the Play Store (planned for August 2026).
+**iPhone, through TestFlight:** install Apple's free [TestFlight app](https://apps.apple.com/app/testflight/id899247664), then open **[testflight.apple.com/join/YqeVwyat](https://testflight.apple.com/join/YqeVwyat)** on your phone. OutageWatch ships as a free TestFlight beta rather than an App Store listing, the same spirit as the APK above. The first build is finishing Apple's one-time beta review; if the link says the beta is not accepting testers yet, check back in a day.
 
-**iOS and the app stores:** native App Store and Google Play listings are planned for **August 2026**. Until then, the Android APK above is the way in.
+**About the Play Protect warning:** the first time you open the APK, Android may say it "hasn't seen an app from this developer before." That is expected for any app installed outside the Play Store, not a sign of a problem. OutageWatch is signed and asks only for internet, notifications, and approximate location. Tap **More details**, then **Install anyway** to continue. The warning goes away if the app lands on the Play Store (still planned, no date yet).
 
 ---
 
@@ -131,7 +131,9 @@ cd mobile
 ./gradlew :androidApp:assembleDebug
 ```
 
-Firebase config for push goes in `mobile/local.properties` (see `androidApp/build.gradle.kts`). Debug builds work without it; push is simply skipped. iOS builds from `mobile/iosApp` in Xcode on a Mac.
+Firebase config for push goes in `mobile/local.properties` (see `androidApp/build.gradle.kts`). Debug builds work without it; push is simply skipped.
+
+**iOS** builds from `mobile/iosApp` in Xcode on a Mac; `docs/IOS_HANDOFF.md` is the technical map and `docs/TESTFLIGHT.md` covers distribution, including the quarterly TestFlight build refresh.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full setup and PR flow.
 
