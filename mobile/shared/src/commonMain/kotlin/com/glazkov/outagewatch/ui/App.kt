@@ -112,7 +112,7 @@ fun App() {
 
         // Android only: it self-updates from GitHub Releases, so once per launch
         // ask GitHub for a newer release (shown once per version). iOS updates
-        // through the App Store, so it must never prompt to download an APK.
+        // through TestFlight, so it must never prompt to download an APK.
         var update by remember { mutableStateOf<AppUpdate.Available?>(null) }
         LaunchedEffect(Unit) {
             if (platformName() != "ios") {
