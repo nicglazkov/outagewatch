@@ -92,9 +92,8 @@ phone number, so in App Store Connect, TestFlight tab:
    outage map. No account or sign-in." Save.
 2. **External Testing > Public**: build 0.2.5 (1) shows **Ready to Submit**;
    click **Submit for Review**.
-3. When it clears (about a day), the public link opens for everyone; the
-   landing page's iPhone card placeholder gets the link and the backend gets
-   deployed.
+3. Done: Beta App Review **approved July 30, 2026**. The public link is open
+   to everyone and wired into the landing page's iPhone card.
 
 ### 5. Quarterly refresh
 
