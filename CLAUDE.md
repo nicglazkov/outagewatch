@@ -12,10 +12,11 @@ authoritative, current-state guide. This file is the whole-project map.
 - **Web app**: served by that same service at `/` (landing), `/statewide`, `/widget`, `/privacy`, `/terms`
 - **Android app**: shipped as a signed APK via GitHub Releases (latest `v0.2.5`). In-app updater pulls new releases.
 - **iOS app**: fully working, push verified end to end on a real iPhone
-  (APNs key, FCM token, subscription, delivery, tap-through). iPhone-only for
-  v1. What remains is TestFlight and the App Store listing: see
-  [`docs/APP_STORE.md`](docs/APP_STORE.md); `docs/IOS_HANDOFF.md` has the
-  technical map.
+  (APNs key, FCM token, subscription, delivery, tap-through). iPhone-only.
+  **Distribution is TestFlight with a public link, no App Store listing**:
+  see [`docs/TESTFLIGHT.md`](docs/TESTFLIGHT.md); `docs/IOS_HANDOFF.md` has
+  the technical map. TestFlight builds expire after 90 days, so a quarterly
+  re-upload is part of normal operations.
 
 ## Repo layout
 

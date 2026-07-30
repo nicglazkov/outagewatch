@@ -67,8 +67,9 @@ Everything remaining is gated on an **Apple Developer Program membership**
 3. **APNs auth key.** Create a `.p8` key in the Apple Developer portal and upload
    it to Firebase, Project Settings, Cloud Messaging, Apple app configuration.
    This is what lets FCM reach APNs. There is no API for this; it is portal-only.
-4. **TestFlight, then the App Store.** Bundle id `com.glazkov.outagewatch`; reuse
-   `PRIVACY.md` / `TERMS.md` for the store listing.
+4. **TestFlight only, no App Store listing.** Bundle id
+   `com.glazkov.outagewatch`; the whole plan, including the quarterly build
+   refresh TestFlight demands, is in [`TESTFLIGHT.md`](TESTFLIGHT.md).
 
 ## Firebase config
 
@@ -130,8 +131,8 @@ open iosApp/iosApp.xcodeproj
   current-location flow saves a precise address, so the finder returns the real
   GPS point.
 - Never wire an in-app "download update" path on iOS. The GitHub-Releases
-  updater is gated to Android in `shared/.../ui/App.kt`; the App Store owns
-  iOS updates.
+  updater is gated to Android in `shared/.../ui/App.kt`; TestFlight (or the
+  App Store, if that ever changes) owns iOS updates.
 - Keep the Compass design system and the house style. The UI is shared, so this
   mostly takes care of itself; just do not add iOS chrome that breaks it.
 
