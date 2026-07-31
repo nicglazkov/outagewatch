@@ -1,0 +1,102 @@
+# Keeps the TestFlight beta alive without anyone touching a Mac.
+#
+# TestFlight builds expire 90 days after upload; this uploads a fresh build
+# monthly, so the live build is never older than about a month. Build numbers
+# are managed by the export step (manageAppVersionAndBuildNumber picks the next
+# number from App Store Connect), signing is Apple cloud signing driven by an
+# Admin-role ASC API key, and the post-upload attach/submit runs against the
+# ASC API. macOS runners are free on public repos.
+#
+# Secrets (Settings > Secrets and variables > Actions):
+#   ASC_ADMIN_KEY_P8    base64 of the Admin-role .p8 (cloud signing needs Admin)
+#   ASC_ADMIN_KEY_ID    its 10-character key id
+#   ASC_ISSUER_ID       the issuer id (same for all keys on the team)
+#   GOOGLE_SERVICE_INFO_PLIST  base64 of GoogleService-Info.plist (gitignored,
+#                              but push must be compiled into TestFlight builds)
+name: testflight
+
+on:
+  schedule:
+    - cron: "23 16 3 * *"   # monthly, the 3rd at 16:23 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    if: github.repository == 'nicglazkov/outagewatch'
+    runs-on: macos-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: mobile/iosApp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Kotlin/Native and Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.konan
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: testflight-${{ runner.os }}-${{ hashFiles('mobile/gradle/libs.versions.toml', 'mobile/gradle/wrapper/gradle-wrapper.properties') }}
+
+      - name: Materialize secrets
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}" | base64 -d > iosApp/GoogleService-Info.plist
+          echo "${{ secrets.ASC_ADMIN_KEY_P8 }}" | base64 -d > "$RUNNER_TEMP/asc.p8"
+          plutil -lint iosApp/GoogleService-Info.plist
+
+      - name: Archive
+        run: |
+          xcodebuild -project iosApp.xcodeproj -scheme iosApp -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/OutageWatch.xcarchive" archive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
+            -authenticationKeyID "${{ secrets.ASC_ADMIN_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
+            | tail -40
+
+      - name: Export and upload
+        run: |
+          cat > "$RUNNER_TEMP/exportOptions.plist" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          	<key>method</key>
+          	<string>app-store-connect</string>
+          	<key>destination</key>
+          	<string>upload</string>
+          	<key>teamID</key>
+          	<string>M7D6YHVDNK</string>
+          	<key>manageAppVersionAndBuildNumber</key>
+          	<true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/OutageWatch.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/exportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
+            -authenticationKeyID "${{ secrets.ASC_ADMIN_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
+
+      - name: Attach to the Public group and submit
+        working-directory: .
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_ADMIN_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_PATH: ${{ runner.temp }}/asc.p8
+        run: python3 .github/scripts/testflight_release.py
