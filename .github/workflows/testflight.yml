@@ -51,6 +51,7 @@ jobs:
 
       - name: Materialize secrets
         run: |
+          echo "RUN_CUTOFF=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
           echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}" | base64 -d > iosApp/GoogleService-Info.plist
           echo "${{ secrets.ASC_ADMIN_KEY_P8 }}" | base64 -d > "$RUNNER_TEMP/asc.p8"
           plutil -lint iosApp/GoogleService-Info.plist
@@ -101,6 +102,7 @@ jobs:
       - name: Attach to the Public group and submit
         working-directory: .
         env:
+          RUN_CUTOFF: ${{ env.RUN_CUTOFF }}
           ASC_KEY_ID: ${{ secrets.ASC_ADMIN_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_PATH: ${{ runner.temp }}/asc.p8
