@@ -57,9 +57,14 @@ jobs:
 
       - name: Archive
         run: |
+          # pipefail, or a failed xcodebuild vanishes behind tail's exit 0.
+          set -o pipefail
+          # DEVELOPMENT_TEAM on the command line: locally it comes from the
+          # gitignored Local.xcconfig, which CI does not have.
           xcodebuild -project iosApp.xcodeproj -scheme iosApp -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/OutageWatch.xcarchive" archive \
+            DEVELOPMENT_TEAM=M7D6YHVDNK \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
             -authenticationKeyID "${{ secrets.ASC_ADMIN_KEY_ID }}" \
