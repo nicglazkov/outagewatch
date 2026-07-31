@@ -95,11 +95,21 @@ phone number, so in App Store Connect, TestFlight tab:
 3. Done: Beta App Review **approved July 30, 2026**. The public link is open
    to everyone and wired into the landing page's iPhone card.
 
-### 5. Quarterly refresh
+### 5. The refresh is CI now
 
-Bump `CFBundleVersion`, re-run the step 3 upload, add the build to the group.
-Existing testers auto-update. This is the recurring cost of TestFlight-only;
-ask Claude to automate it on a schedule once the API key exists.
+`.github/workflows/testflight.yml` uploads a fresh build **monthly** (the 3rd,
+16:23 UTC) on a free public-repo macOS runner, so the live build is never
+older than about a month against the 90-day expiry. Build numbers come from
+`manageAppVersionAndBuildNumber`, signing is Apple cloud signing driven by an
+**Admin**-role ASC API key (App Manager cannot cloud-sign), and
+`.github/scripts/testflight_release.py` attaches the processed build to the
+Public group and submits it (auto-cleared after the first review).
+
+Repo secrets it needs: `ASC_ADMIN_KEY_P8` (base64 `.p8`), `ASC_ADMIN_KEY_ID`,
+`ASC_ISSUER_ID`, `GOOGLE_SERVICE_INFO_PLIST` (base64; push must be compiled
+into TestFlight builds). GitHub emails on workflow failure; the step 3 manual
+recipe remains the fallback, and a scheduled cloud reminder for October 20,
+2026 backstops the first cycle.
 
 ## Appendix: store material, kept in case the decision ever changes
 
