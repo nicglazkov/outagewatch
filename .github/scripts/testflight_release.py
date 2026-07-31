@@ -59,30 +59,41 @@ def call(method: str, path: str, body=None):
 
 
 def main() -> int:
-    # The upload just happened; wait for the newest build to finish processing.
+    # Only accept a build uploaded by THIS run: right after xcodebuild returns,
+    # the ASC API can still be showing the previous build as newest, and acting
+    # on that attaches the wrong build. RUN_CUTOFF is stamped by the workflow
+    # before the archive starts.
+    cutoff = os.environ["RUN_CUTOFF"]
     build = None
     for attempt in range(60):  # up to 30 minutes
         resp = call("GET", f"/v1/builds?filter[app]={APP_ID}"
                            "&sort=-uploadedDate&limit=1"
-                           "&fields[builds]=version,processingState,expirationDate")
+                           "&fields[builds]=version,processingState,expirationDate,uploadedDate")
         data = resp.get("data", [])
         if data:
-            build = data[0]
-            state = build["attributes"]["processingState"]
-            print(f"newest build {build['attributes']['version']}: {state}")
-            if state == "VALID":
-                break
-            if state in ("FAILED", "INVALID"):
-                print("build processing failed", file=sys.stderr)
-                return 1
+            candidate = data[0]
+            a = candidate["attributes"]
+            if a.get("uploadedDate", "") < cutoff:
+                print(f"newest build {a['version']} predates this run, waiting")
+            else:
+                print(f"this run's build {a['version']}: {a['processingState']}")
+                if a["processingState"] == "VALID":
+                    build = candidate
+                    break
+                if a["processingState"] in ("FAILED", "INVALID"):
+                    print("build processing failed", file=sys.stderr)
+                    return 1
         time.sleep(30)
-    else:
-        print("timed out waiting for processing", file=sys.stderr)
+    if build is None:
+        print("timed out waiting for this run's build", file=sys.stderr)
         return 1
 
     bid = build["id"]
-    call("POST", f"/v1/betaGroups/{GROUP_ID}/relationships/builds",
-         {"data": [{"type": "builds", "id": bid}]})
+    resp = call("POST", f"/v1/betaGroups/{GROUP_ID}/relationships/builds",
+                {"data": [{"type": "builds", "id": bid}]})
+    if resp.get("errors"):
+        print("attach failed:", resp["errors"], file=sys.stderr)
+        return 1
     print("attached to Public group")
 
     resp = call("POST", "/v1/betaAppReviewSubmissions",
