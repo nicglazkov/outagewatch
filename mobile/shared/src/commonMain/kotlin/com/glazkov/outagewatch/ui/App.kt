@@ -77,10 +77,11 @@ object AppInfo {
     var version: String = ""
 }
 
-/** Where the legal docs and feedback go. Update if you move to a custom domain. */
+/** Where the legal docs and feedback go. Privacy and terms open the styled
+ *  pages the backend serves, not GitHub. Update if you move to a custom domain. */
 object Links {
-    const val PRIVACY = "https://github.com/nicglazkov/outagewatch/blob/main/PRIVACY.md"
-    const val TERMS = "https://github.com/nicglazkov/outagewatch/blob/main/TERMS.md"
+    const val PRIVACY = "https://outagewatch-api-7bi2fdpqrq-uw.a.run.app/privacy"
+    const val TERMS = "https://outagewatch-api-7bi2fdpqrq-uw.a.run.app/terms"
     const val FEEDBACK = "https://github.com/nicglazkov/outagewatch/issues"
 }
 

@@ -130,7 +130,7 @@ TestFlight Test Information source. Screenshots at Apple's 6.9-inch size are in
 | Secondary category | Weather |
 | Age rating | 4+ |
 | Price | Free |
-| Privacy Policy URL | `https://github.com/nicglazkov/outagewatch/blob/main/PRIVACY.md` |
+| Privacy Policy URL | `https://outagewatch-api-7bi2fdpqrq-uw.a.run.app/privacy` |
 | Support / feedback URL | `https://github.com/nicglazkov/outagewatch/issues` |
 
 In any review notes (Beta App Review included): the app is not affiliated with
