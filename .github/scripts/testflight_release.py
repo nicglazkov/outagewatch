@@ -13,6 +13,15 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime
+
+
+def instant(iso: str) -> datetime:
+    """Parse an ISO timestamp to an aware datetime. ASC returns offsets like
+    -07:00 while the workflow stamps Z; comparing them as strings inverts the
+    order across the offset boundary, which is exactly the bug that orphaned
+    build 3."""
+    return datetime.fromisoformat(iso.replace("Z", "+00:00"))
 
 APP_ID = "6796215203"                                   # OutageWatch iOS
 GROUP_ID = "ede108c9-195c-4cd7-8de8-b23ac36669d6"       # external group "Public"
@@ -63,7 +72,7 @@ def main() -> int:
     # the ASC API can still be showing the previous build as newest, and acting
     # on that attaches the wrong build. RUN_CUTOFF is stamped by the workflow
     # before the archive starts.
-    cutoff = os.environ["RUN_CUTOFF"]
+    cutoff = instant(os.environ["RUN_CUTOFF"])
     build = None
     for attempt in range(60):  # up to 30 minutes
         resp = call("GET", f"/v1/builds?filter[app]={APP_ID}"
@@ -73,7 +82,7 @@ def main() -> int:
         if data:
             candidate = data[0]
             a = candidate["attributes"]
-            if a.get("uploadedDate", "") < cutoff:
+            if instant(a.get("uploadedDate", "1970-01-01T00:00:00Z")) < cutoff:
                 print(f"newest build {a['version']} predates this run, waiting")
             else:
                 print(f"this run's build {a['version']}: {a['processingState']}")
