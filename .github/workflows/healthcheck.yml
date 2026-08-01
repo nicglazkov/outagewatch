@@ -1,0 +1,44 @@
+# Daily proof the whole pipeline is alive, so the project can sit untouched.
+# Asserts the public endpoints answer and, more importantly, that the outage
+# data is fresh: last_update comes from the poller's snapshot, so a stale
+# value means Cloud Scheduler, the poller, or PG&E's feed is broken even when
+# every endpoint still returns 200. GitHub emails on failure; that email is
+# the entire monitoring story.
+name: healthcheck
+
+on:
+  schedule:
+    - cron: "41 15 * * *"   # daily, 15:41 UTC
+  workflow_dispatch: {}
+
+jobs:
+  probe:
+    if: github.repository == 'nicglazkov/outagewatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Endpoints answer
+        run: |
+          for p in "/" "/v1/outages?zip=95336" "/statewide" "/privacy" "/terms"; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 \
+              "https://outagewatch-api-7bi2fdpqrq-uw.a.run.app$p")
+            echo "$code $p"
+            [ "$code" = "200" ] || exit 1
+          done
+      - name: Outage data is fresh
+        run: |
+          curl -s --max-time 20 "https://outagewatch-api-7bi2fdpqrq-uw.a.run.app/v1/outages?lat=37.3&lon=-121.9&radius_km=100" \
+          | python3 -c "
+          import sys, json, datetime
+          d = json.load(sys.stdin)
+          assert isinstance(d, list), f'unexpected response: {str(d)[:200]}'
+          newest = max((o.get('last_update') or '' for o in d), default='')
+          # An empty list with no timestamps is indistinguishable from a dead
+          # poller, and PG&E territory is never outage-free for a whole day,
+          # so both cases fail loudly rather than pass quietly.
+          assert newest, 'no outages and no timestamps: poller likely dead'
+          age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(newest.replace('Z', '+00:00'))
+          hours = age.total_seconds() / 3600
+          print(f'{len(d)} outages, newest {hours:.1f}h old')
+          assert hours < 24, f'data is {hours:.0f}h stale: scheduler, poller, or feed is broken'
+          "
