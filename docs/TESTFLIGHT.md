@@ -107,9 +107,11 @@ Public group and submits it (auto-cleared after the first review).
 
 Repo secrets it needs: `ASC_ADMIN_KEY_P8` (base64 `.p8`), `ASC_ADMIN_KEY_ID`,
 `ASC_ISSUER_ID`, `GOOGLE_SERVICE_INFO_PLIST` (base64; push must be compiled
-into TestFlight builds). GitHub emails on workflow failure; the step 3 manual
-recipe remains the fallback, and a scheduled cloud reminder for October 20,
-2026 backstops the first cycle.
+into TestFlight builds). GitHub emails on workflow failure, and the step 3 manual
+recipe remains the fallback. Proven end to end August 1, 2026: build 4 was
+archived, uploaded, attached, and submitted with zero human steps, after two
+real-service bugs (ASC upload lag, and offset-format timestamps compared as
+strings) were found and fixed by the first cycles.
 
 ## Appendix: store material, kept in case the decision ever changes
 
