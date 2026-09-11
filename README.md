@@ -32,7 +32,7 @@ The app runs on **both iPhone and Android** today. iPhone installs through a fre
 
 **Android, right now:** grab the latest `OutageWatch-x.y.z.apk` from the [**Releases**](https://github.com/nicglazkov/outagewatch/releases/latest) page and open it on your phone. You may need to allow "install from this source" when your browser or files app asks. It updates in place over older versions.
 
-**iPhone, through TestFlight:** install Apple's free [TestFlight app](https://apps.apple.com/app/testflight/id899247664), then open **[testflight.apple.com/join/YqeVwyat](https://testflight.apple.com/join/YqeVwyat)** on your phone. OutageWatch ships as a free TestFlight beta rather than an App Store listing, the same spirit as the APK above. The first build is finishing Apple's one-time beta review; if the link says the beta is not accepting testers yet, check back in a day.
+**iPhone, through TestFlight:** install Apple's free [TestFlight app](https://apps.apple.com/app/testflight/id899247664), then open **[testflight.apple.com/join/YqeVwyat](https://testflight.apple.com/join/YqeVwyat)** on your phone. OutageWatch ships as a free TestFlight beta rather than an App Store listing, the same spirit as the APK above.
 
 **About the Play Protect warning:** the first time you open the APK, Android may say it "hasn't seen an app from this developer before." That is expected for any app installed outside the Play Store, not a sign of a problem. OutageWatch is signed and asks only for internet, notifications, and approximate location. Tap **More details**, then **Install anyway** to continue. The warning goes away if the app lands on the Play Store (still planned, no date yet).
 
@@ -135,7 +135,7 @@ cd mobile
 
 Firebase config for push goes in `mobile/local.properties` (see `androidApp/build.gradle.kts`). Debug builds work without it; push is simply skipped.
 
-**iOS** builds from `mobile/iosApp` in Xcode on a Mac; `docs/IOS_HANDOFF.md` is the technical map and `docs/TESTFLIGHT.md` covers distribution, including the quarterly TestFlight build refresh.
+**iOS** builds from `mobile/iosApp` in Xcode on a Mac; `docs/IOS_HANDOFF.md` is the technical map and `docs/TESTFLIGHT.md` covers distribution, including the automated monthly TestFlight build refresh.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full setup and PR flow.
 
